@@ -32,8 +32,8 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  apiBaseUrl: "",
-  m3uUrl: "",
+  apiBaseUrl: "https://moontv.lumi210.qzz.io",
+  m3uUrl: "https://oa.fushanhn.com/result.m3u",
   liveStreamSources: [],
   remoteInputEnabled: false,
   isModalVisible: false,
@@ -46,18 +46,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     const settings = await SettingsManager.get();
     set({
-      apiBaseUrl: settings.apiBaseUrl,
-      m3uUrl: settings.m3uUrl,
+      apiBaseUrl: "https://moontv.lumi210.qzz.io",
+      m3uUrl: "https://oa.fushanhn.com/result.m3u",
       remoteInputEnabled: settings.remoteInputEnabled || false,
       videoSource: settings.videoSource || {
         enabledAll: true,
         sources: {},
       },
     });
-    if (settings.apiBaseUrl) {
-      api.setBaseUrl(settings.apiBaseUrl);
-      await get().fetchServerConfig();
-    }
+    api.setBaseUrl("https://moontv.lumi210.qzz.io");
+    await get().fetchServerConfig();
   },
   fetchServerConfig: async () => {
     set({ isLoadingServerConfig: true });
@@ -74,44 +72,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({ isLoadingServerConfig: false });
     }
   },
-  setApiBaseUrl: (url) => set({ apiBaseUrl: url }),
-  setM3uUrl: (url) => set({ m3uUrl: url }),
+  setApiBaseUrl: () => {
+  },
+  setM3uUrl: () => {
+  },
   setRemoteInputEnabled: (enabled) => set({ remoteInputEnabled: enabled }),
   setVideoSource: (config) => set({ videoSource: config }),
   saveSettings: async () => {
-    const { apiBaseUrl, m3uUrl, remoteInputEnabled, videoSource } = get();
+    const { remoteInputEnabled, videoSource } = get();
     const currentSettings = await SettingsManager.get()
     const currentApiBaseUrl = currentSettings.apiBaseUrl;
-    let processedApiBaseUrl = apiBaseUrl.trim();
-    if (processedApiBaseUrl.endsWith("/")) {
-      processedApiBaseUrl = processedApiBaseUrl.slice(0, -1);
-    }
-
-    if (!/^https?:\/\//i.test(processedApiBaseUrl)) {
-      const hostPart = processedApiBaseUrl.split("/")[0];
-      // Simple check for IP address format.
-      const isIpAddress = /^((\d{1,3}\.){3}\d{1,3})(:\d+)?$/.test(hostPart);
-      // Check if the domain includes a port.
-      const hasPort = /:\d+/.test(hostPart);
-
-      if (isIpAddress || hasPort) {
-        processedApiBaseUrl = "http://" + processedApiBaseUrl;
-      } else {
-        processedApiBaseUrl = "https://" + processedApiBaseUrl;
-      }
-    }
+    const processedApiBaseUrl = "https://moontv.lumi210.qzz.io";
 
     await SettingsManager.save({
       apiBaseUrl: processedApiBaseUrl,
-      m3uUrl,
+      m3uUrl: "https://oa.fushanhn.com/result.m3u",
       remoteInputEnabled,
       videoSource,
     });
-    if ( currentApiBaseUrl !== processedApiBaseUrl) {
+    if (currentApiBaseUrl !== processedApiBaseUrl) {
       await AsyncStorage.setItem('authCookies', '');
     }
     api.setBaseUrl(processedApiBaseUrl);
-    // Also update the URL in the state so the input field shows the processed URL
     set({ isModalVisible: false, apiBaseUrl: processedApiBaseUrl });
     await get().fetchServerConfig();
   },

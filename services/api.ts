@@ -76,7 +76,7 @@ export interface ServerConfig {
 }
 
 export class API {
-  public baseURL: string = "";
+  public baseURL: string = "https://moontv.lumi210.qzz.io";
 
   constructor(baseURL?: string) {
     if (baseURL) {
