@@ -37,8 +37,8 @@ export const LiveStreamSection = React.forwardRef<any, LiveStreamSectionProps>(
     const loadSources = async () => {
       setIsLoading(true);
       try {
-        const response = await api.getIPTVSources();
-        setSources(response.sources || []);
+        const sourcesData = await api.getIPTVSources();
+        setSources(sourcesData);
       } catch (error) {
         logger.error('Failed to load IPTV sources:', error);
       } finally {

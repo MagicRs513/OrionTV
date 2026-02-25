@@ -252,18 +252,20 @@ export class API {
     return response.json();
   }
 
-  async getIPTVChannels(): Promise<{ channels: IPTVChannel[] }> {
-    const response = await this._fetch("/api/iptv/channels");
-    return response.json();
+  async getIPTVChannels(sourceKey: string): Promise<IPTVChannel[]> {
+    const response = await this._fetch(`/api/live/channels?source=${encodeURIComponent(sourceKey)}`);
+    const result = await response.json();
+    return result.data || [];
   }
 
-  async getIPTVSources(): Promise<{ sources: IPTVSource[] }> {
-    const response = await this._fetch("/api/iptv/sources");
-    return response.json();
+  async getIPTVSources(): Promise<IPTVSource[]> {
+    const response = await this._fetch("/api/live/sources");
+    const result = await response.json();
+    return result.data || [];
   }
 
-  getIPTVStreamProxyUrl(originalUrl: string): string {
-    return `${this.baseURL}/api/iptv/stream-proxy?url=${encodeURIComponent(originalUrl)}`;
+  getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string): string {
+    return `${this.baseURL}/api/live/stream?url=${encodeURIComponent(originalUrl)}&source=${encodeURIComponent(sourceKey)}`;
   }
 }
 

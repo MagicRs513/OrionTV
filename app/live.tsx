@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text, Alert } from "react-native";
+import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text } from "react-native";
 import LivePlayer from "@/components/LivePlayer";
-import { api, IPTVChannel } from "@/services/api";
+import { api, IPTVChannel, IPTVSource } from "@/services/api";
 import { ThemedView } from "@/components/ThemedView";
 import { StyledButton } from "@/components/StyledButton";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
@@ -21,6 +21,8 @@ export default function LiveScreen() {
   const commonStyles = getCommonResponsiveStyles(responsiveConfig);
   const { deviceType, spacing } = responsiveConfig;
 
+  const [sources, setSources] = useState<IPTVSource[]>([]);
+  const [currentSource, setCurrentSource] = useState<IPTVSource | null>(null);
   const [channels, setChannels] = useState<IPTVChannel[]>([]);
   const [groupedChannels, setGroupedChannels] = useState<Record<string, IPTVChannel[]>>({});
   const [channelGroups, setChannelGroups] = useState<string[]>([]);
@@ -28,41 +30,73 @@ export default function LiveScreen() {
 
   const [currentChannelIndex, setCurrentChannelIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingChannels, setIsLoadingChannels] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const selectedChannelUrl = channels.length > 0 
-    ? api.getIPTVStreamProxyUrl(channels[currentChannelIndex].url) 
+  const selectedChannelUrl = channels.length > 0 && currentSource
+    ? api.getIPTVStreamProxyUrl(channels[currentChannelIndex].url, currentSource.id) 
     : null;
 
   useEffect(() => {
     if (isLoggedIn && !isLoginModalVisible) {
-      loadChannels();
+      loadSources();
     }
   }, [isLoggedIn, isLoginModalVisible]);
 
-  const loadChannels = async () => {
+  const loadSources = async () => {
     setIsLoading(true);
     setLoadError(null);
+    setSources([]);
+    setCurrentSource(null);
+    setChannels([]);
+    
+    try {
+      const sourcesData = await api.getIPTVSources();
+      
+      if (sourcesData.length === 0) {
+        setLoadError('暂无直播源，请在后台配置');
+        setIsLoading(false);
+        return;
+      }
+      
+      setSources(sourcesData);
+      const firstSource = sourcesData[0];
+      setCurrentSource(firstSource);
+      
+      await loadChannels(firstSource.id);
+    } catch (error) {
+      logger.error('Failed to load sources:', error);
+      if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+        setLoadError('请先登录');
+      } else {
+        setLoadError('加载直播源失败，请检查网络连接');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadChannels = async (sourceId: string) => {
+    setIsLoadingChannels(true);
     setChannels([]);
     setGroupedChannels({});
     setChannelGroups([]);
     
     try {
-      const response = await api.getIPTVChannels();
-      const parsedChannels = response.channels || [];
+      const channelsData = await api.getIPTVChannels(sourceId);
       
-      if (parsedChannels.length === 0) {
-        setLoadError('暂无直播频道，请在后台配置直播源');
-        setIsLoading(false);
+      if (channelsData.length === 0) {
+        setLoadError('该直播源暂无频道');
+        setIsLoadingChannels(false);
         return;
       }
       
-      setChannels(parsedChannels);
+      setChannels(channelsData);
 
-      const groups: Record<string, IPTVChannel[]> = parsedChannels.reduce((acc, channel) => {
+      const groups: Record<string, IPTVChannel[]> = channelsData.reduce((acc, channel) => {
         const groupName = channel.group || "其他";
         if (!acc[groupName]) {
           acc[groupName] = [];
@@ -76,19 +110,22 @@ export default function LiveScreen() {
       setChannelGroups(groupNames);
       setSelectedGroup(groupNames[0] || "");
 
-      if (parsedChannels.length > 0) {
-        showChannelTitle(parsedChannels[0].name);
+      if (channelsData.length > 0) {
+        showChannelTitle(channelsData[0].name);
       }
     } catch (error) {
       logger.error('Failed to load channels:', error);
-      if (error instanceof Error && error.message === 'UNAUTHORIZED') {
-        setLoadError('请先登录');
-      } else {
-        setLoadError('加载直播频道失败，请检查网络连接');
-      }
+      setLoadError('加载频道失败');
     } finally {
-      setIsLoading(false);
+      setIsLoadingChannels(false);
     }
+  };
+
+  const handleSourceChange = async (source: IPTVSource) => {
+    setCurrentSource(source);
+    setCurrentChannelIndex(0);
+    setLoadError(null);
+    await loadChannels(source.id);
   };
 
   const showChannelTitle = (title: string) => {
@@ -147,21 +184,30 @@ export default function LiveScreen() {
       return (
         <View style={dynamicStyles.loadingContainer}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={dynamicStyles.messageText}>正在加载直播频道...</Text>
+          <Text style={dynamicStyles.messageText}>正在加载直播源...</Text>
         </View>
       );
     }
 
-    if (loadError) {
+    if (loadError && sources.length === 0) {
       return (
         <View style={dynamicStyles.errorContainer}>
           <Text style={dynamicStyles.errorText}>加载失败</Text>
           <Text style={dynamicStyles.errorDetailText}>{loadError}</Text>
           <StyledButton
             text="重试"
-            onPress={loadChannels}
+            onPress={loadSources}
             style={dynamicStyles.retryButton}
           />
+        </View>
+      );
+    }
+
+    if (isLoadingChannels) {
+      return (
+        <View style={dynamicStyles.loadingContainer}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={dynamicStyles.messageText}>正在加载频道...</Text>
         </View>
       );
     }
@@ -181,7 +227,30 @@ export default function LiveScreen() {
         >
           <View style={dynamicStyles.modalContainer}>
             <View style={dynamicStyles.modalContent}>
-              <Text style={dynamicStyles.modalTitle}>选择频道 ({channels.length} 个)</Text>
+              <Text style={dynamicStyles.modalTitle}>
+                {currentSource?.name || '直播'} ({channels.length} 个频道)
+              </Text>
+              
+              {sources.length > 1 && (
+                <View style={dynamicStyles.sourceSelector}>
+                  <FlatList
+                    horizontal
+                    data={sources}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                      <StyledButton
+                        text={item.name}
+                        onPress={() => handleSourceChange(item)}
+                        isSelected={currentSource?.id === item.id}
+                        style={dynamicStyles.sourceButton}
+                        textStyle={dynamicStyles.sourceButtonText}
+                      />
+                    )}
+                    style={dynamicStyles.sourceList}
+                  />
+                </View>
+              )}
+              
               <View style={dynamicStyles.listContainer}>
                 <View style={dynamicStyles.groupColumn}>
                   <FlatList
@@ -214,13 +283,13 @@ export default function LiveScreen() {
                     )}
                   />
                 </View>
-                </View>
               </View>
             </View>
           </Modal>
         </>
-      );
-    };
+      </>
+    );
+  };
 
   const content = (
     <ThemedView style={[commonStyles.container, dynamicStyles.container]}>
@@ -301,6 +370,20 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
       textAlign: "center",
       fontSize: isMobile ? 18 : 16,
       fontWeight: "bold",
+    },
+    sourceSelector: {
+      marginBottom: spacing / 2,
+    },
+    sourceList: {
+      maxHeight: 50,
+    },
+    sourceButton: {
+      paddingHorizontal: spacing,
+      paddingVertical: spacing / 2,
+      marginRight: spacing / 2,
+    },
+    sourceButtonText: {
+      fontSize: isMobile ? 12 : 13,
     },
     listContainer: {
       flex: 1,
