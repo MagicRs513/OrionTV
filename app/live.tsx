@@ -1,25 +1,28 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text, Alert } from "react-native";
 import LivePlayer from "@/components/LivePlayer";
-import { fetchAndParseM3u, getPlayableUrl, Channel } from "@/services/m3u";
+import { api, IPTVChannel } from "@/services/api";
 import { ThemedView } from "@/components/ThemedView";
 import { StyledButton } from "@/components/StyledButton";
-import { useSettingsStore } from "@/stores/settingsStore";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
 import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
 import ResponsiveHeader from "@/components/navigation/ResponsiveHeader";
 import { DeviceUtils } from "@/utils/DeviceUtils";
+import { useAuthStore } from "@/stores/authStore";
+import Logger from "@/utils/Logger";
+
+const logger = Logger.withTag('LiveScreen');
 
 export default function LiveScreen() {
-  const { m3uUrl } = useSettingsStore();
+  const { isLoggedIn, isLoginModalVisible } = useAuthStore();
   
   const responsiveConfig = useResponsiveLayout();
   const commonStyles = getCommonResponsiveStyles(responsiveConfig);
   const { deviceType, spacing } = responsiveConfig;
 
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [groupedChannels, setGroupedChannels] = useState<Record<string, Channel[]>>({});
+  const [channels, setChannels] = useState<IPTVChannel[]>([]);
+  const [groupedChannels, setGroupedChannels] = useState<Record<string, IPTVChannel[]>>({});
   const [channelGroups, setChannelGroups] = useState<string[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
 
@@ -30,40 +33,43 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const selectedChannelUrl = channels.length > 0 ? getPlayableUrl(channels[currentChannelIndex].url) : null;
+  const selectedChannelUrl = channels.length > 0 
+    ? api.getIPTVStreamProxyUrl(channels[currentChannelIndex].url) 
+    : null;
 
   useEffect(() => {
-    const loadChannels = async () => {
-      if (!m3uUrl) {
-        setLoadError('请先设置直播源地址');
-        return;
-      }
+    if (isLoggedIn && !isLoginModalVisible) {
+      loadChannels();
+    }
+  }, [isLoggedIn, isLoginModalVisible]);
+
+  const loadChannels = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    setChannels([]);
+    setGroupedChannels({});
+    setChannelGroups([]);
+    
+    try {
+      const response = await api.getIPTVChannels();
+      const parsedChannels = response.channels || [];
       
-      setIsLoading(true);
-      setLoadError(null);
-      setChannels([]);
-      setGroupedChannels({});
-      setChannelGroups([]);
-      
-      const result = await fetchAndParseM3u(m3uUrl);
-      
-      if (result.error) {
-        setLoadError(result.error);
+      if (parsedChannels.length === 0) {
+        setLoadError('暂无直播频道，请在后台配置直播源');
         setIsLoading(false);
         return;
       }
       
-      const parsedChannels = result.channels;
       setChannels(parsedChannels);
 
-      const groups: Record<string, Channel[]> = parsedChannels.reduce((acc, channel) => {
-        const groupName = channel.group || "Other";
+      const groups: Record<string, IPTVChannel[]> = parsedChannels.reduce((acc, channel) => {
+        const groupName = channel.group || "其他";
         if (!acc[groupName]) {
           acc[groupName] = [];
         }
         acc[groupName].push(channel);
         return acc;
-      }, {} as Record<string, Channel[]>);
+      }, {} as Record<string, IPTVChannel[]>);
 
       const groupNames = Object.keys(groups);
       setGroupedChannels(groups);
@@ -73,10 +79,17 @@ export default function LiveScreen() {
       if (parsedChannels.length > 0) {
         showChannelTitle(parsedChannels[0].name);
       }
+    } catch (error) {
+      logger.error('Failed to load channels:', error);
+      if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+        setLoadError('请先登录');
+      } else {
+        setLoadError('加载直播频道失败，请检查网络连接');
+      }
+    } finally {
       setIsLoading(false);
-    };
-    loadChannels();
-  }, [m3uUrl]);
+    }
+  };
 
   const showChannelTitle = (title: string) => {
     setChannelTitle(title);
@@ -84,7 +97,7 @@ export default function LiveScreen() {
     titleTimer.current = setTimeout(() => setChannelTitle(null), 3000);
   };
 
-  const handleSelectChannel = (channel: Channel) => {
+  const handleSelectChannel = (channel: IPTVChannel) => {
     const globalIndex = channels.findIndex((c) => c.id === channel.id);
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
@@ -122,11 +135,19 @@ export default function LiveScreen() {
   const dynamicStyles = createResponsiveStyles(deviceType, spacing);
 
   const renderLiveContent = () => {
+    if (!isLoggedIn) {
+      return (
+        <View style={dynamicStyles.loadingContainer}>
+          <Text style={dynamicStyles.messageText}>请先登录以观看直播</Text>
+        </View>
+      );
+    }
+
     if (isLoading) {
       return (
         <View style={dynamicStyles.loadingContainer}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={dynamicStyles.messageText}>正在加载直播源...</Text>
+          <Text style={dynamicStyles.messageText}>正在加载直播频道...</Text>
         </View>
       );
     }
@@ -138,40 +159,7 @@ export default function LiveScreen() {
           <Text style={dynamicStyles.errorDetailText}>{loadError}</Text>
           <StyledButton
             text="重试"
-            onPress={() => {
-              setLoadError(null);
-              const loadChannels = async () => {
-                if (!m3uUrl) {
-                  setLoadError('请先设置直播源地址');
-                  return;
-                }
-                setIsLoading(true);
-                const result = await fetchAndParseM3u(m3uUrl);
-                if (result.error) {
-                  setLoadError(result.error);
-                  setIsLoading(false);
-                  return;
-                }
-                const parsedChannels = result.channels;
-                setChannels(parsedChannels);
-                const groups: Record<string, Channel[]> = parsedChannels.reduce((acc, channel) => {
-                  const groupName = channel.group || "Other";
-                  if (!acc[groupName]) {
-                    acc[groupName] = [];
-                  }
-                  acc[groupName].push(channel);
-                  return acc;
-                }, {} as Record<string, Channel[]>);
-                setGroupedChannels(groups);
-                setChannelGroups(Object.keys(groups));
-                setSelectedGroup(Object.keys(groups)[0] || "");
-                if (parsedChannels.length > 0) {
-                  showChannelTitle(parsedChannels[0].name);
-                }
-                setIsLoading(false);
-              };
-              loadChannels();
-            }}
+            onPress={loadChannels}
             style={dynamicStyles.retryButton}
           />
         </View>
@@ -240,7 +228,6 @@ export default function LiveScreen() {
     </ThemedView>
   );
 
-  // 根据设备类型决定是否包装在响应式导航中
   if (deviceType === 'tv') {
     return content;
   }

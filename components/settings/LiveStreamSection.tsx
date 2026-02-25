@@ -1,13 +1,16 @@
-import React, { useState, useRef, useImperativeHandle, forwardRef } from "react";
-import { View, TextInput, StyleSheet, Animated, Platform } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import { useTVEventHandler } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
-import { useSettingsStore } from "@/stores/settingsStore";
-import { useRemoteControlStore } from "@/stores/remoteControlStore";
+import { useAuthStore } from "@/stores/authStore";
+import { api, IPTVSource } from "@/services/api";
 import { useButtonAnimation } from "@/hooks/useAnimation";
 import { Colors } from "@/constants/Colors";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
+import Logger from "@/utils/Logger";
+
+const logger = Logger.withTag('LiveStreamSection');
 
 interface LiveStreamSectionProps {
   onChanged: () => void;
@@ -16,31 +19,32 @@ interface LiveStreamSectionProps {
   onPress?: () => void;
 }
 
-export interface LiveStreamSectionRef {
-  setInputValue: (value: string) => void;
-}
-
-export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSectionProps>(
+export const LiveStreamSection = React.forwardRef<any, LiveStreamSectionProps>(
   ({ onChanged, onFocus, onBlur, onPress }, ref) => {
-    const { m3uUrl, setM3uUrl, remoteInputEnabled } = useSettingsStore();
-    const { serverUrl } = useRemoteControlStore();
-    const [isInputFocused, setIsInputFocused] = useState(false);
+    const { isLoggedIn } = useAuthStore();
+    const [isLoading, setIsLoading] = useState(false);
+    const [sources, setSources] = useState<IPTVSource[]>([]);
     const [isSectionFocused, setIsSectionFocused] = useState(false);
-    const inputRef = useRef<TextInput>(null);
     const inputAnimationStyle = useButtonAnimation(isSectionFocused, 1.01);
     const deviceType = useResponsiveLayout().deviceType;
 
-    const handleUrlChange = (url: string) => {
-      setM3uUrl(url);
-      onChanged();
-    };
+    useEffect(() => {
+      if (isLoggedIn) {
+        loadSources();
+      }
+    }, [isLoggedIn]);
 
-    useImperativeHandle(ref, () => ({
-      setInputValue: (value: string) => {
-        setM3uUrl(value);
-        onChanged();
-      },
-    }));
+    const loadSources = async () => {
+      setIsLoading(true);
+      try {
+        const response = await api.getIPTVSources();
+        setSources(response.sources || []);
+      } catch (error) {
+        logger.error('Failed to load IPTV sources:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
     const handleSectionFocus = () => {
       setIsSectionFocused(true);
@@ -52,74 +56,80 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
       onBlur?.();
     };
 
-    const handlePress = () => {
-      inputRef.current?.focus();
-      onPress?.();
-    }
-
     const handleTVEvent = React.useCallback(
       (event: any) => {
         if (isSectionFocused && event.eventType === "select") {
-          inputRef.current?.focus();
+          onPress?.();
         }
       },
-      [isSectionFocused]
+      [isSectionFocused, onPress]
     );
 
     useTVEventHandler(handleTVEvent);
 
+    const renderContent = () => {
+      if (!isLoggedIn) {
+        return (
+          <View style={styles.infoContainer}>
+            <ThemedText style={styles.infoText}>请先登录以管理直播源</ThemedText>
+          </View>
+        );
+      }
 
-        const [selection, setSelection] = useState<{ start: number; end: number }>({
-          start: 0,
-          end: 0,
-        });
-        // 当用户手动移动光标或选中文本时，同步到 state（可选）
-        const onSelectionChange = ({
-          nativeEvent: { selection },
-        }: any) => {
-          setSelection(selection);
-        };
+      if (isLoading) {
+        return (
+          <View style={styles.infoContainer}>
+            <ActivityIndicator size="small" color={Colors.dark.primary} />
+            <ThemedText style={styles.infoText}>加载中...</ThemedText>
+          </View>
+        );
+      }
+
+      if (sources.length === 0) {
+        return (
+          <View style={styles.infoContainer}>
+            <ThemedText style={styles.infoText}>暂无直播源配置</ThemedText>
+            <ThemedText style={styles.hintText}>
+              请在 LunaTV 后台管理页面配置 IPTV 直播源
+            </ThemedText>
+          </View>
+        );
+      }
+
+      return (
+        <View style={styles.sourcesContainer}>
+          <ThemedText style={styles.sourceCount}>
+            已配置 {sources.length} 个直播源
+          </ThemedText>
+          {sources.map((source, index) => (
+            <View key={source.id || index} style={styles.sourceItem}>
+              <ThemedText style={styles.sourceName}>
+                {source.name || '未命名'}
+              </ThemedText>
+              <ThemedText style={styles.sourceStatus}>
+                {source.isActive ? '已启用' : '已禁用'}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      );
+    };
 
     return (
-      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}
-        onPress={Platform.isTV || deviceType !== 'tv' ? undefined : handlePress}
+      <SettingsSection 
+        focusable 
+        onFocus={handleSectionFocus} 
+        onBlur={handleSectionBlur}
+        onPress={Platform.isTV || deviceType !== 'tv' ? undefined : onPress}
       >
-        <View style={styles.inputContainer}>
+        <View style={styles.container}>
           <View style={styles.titleContainer}>
-            <ThemedText style={styles.sectionTitle}>直播源地址</ThemedText>
-            {remoteInputEnabled && serverUrl && (
-              <ThemedText style={styles.subtitle}>用手机访问 {serverUrl}，可远程输入</ThemedText>
-            )}
+            <ThemedText style={styles.sectionTitle}>直播源管理</ThemedText>
+            <ThemedText style={styles.subtitle}>
+              通过 LunaTV 后台统一管理
+            </ThemedText>
           </View>
-          <Animated.View style={inputAnimationStyle}>
-            <TextInput
-              ref={inputRef}
-              style={[styles.input, isInputFocused && styles.inputFocused]}
-              value={m3uUrl}
-              onChangeText={handleUrlChange}
-              placeholder="输入 M3U 直播源地址"
-              placeholderTextColor="#888"
-              autoCapitalize="none"
-              autoCorrect={false}
-              onFocus={() => {
-                setIsInputFocused(true);
-                // 将光标移动到文本末尾
-                const end = m3uUrl.length;
-                setSelection({ start: end, end: end });
-                // 有时需要延迟一下，让系统先完成 focus 再设置 selection
-                //（在 Android 上更可靠）
-                setTimeout(() => {
-                  // 对于受控的 selection 已经生效，这里仅作保险
-                  inputRef.current?.setNativeProps({ selection: { start: end, end: end } });
-                }, 0);
-              }}
-              selection={selection}
-              onSelectionChange={onSelectionChange} // 可选
-
-              onBlur={() => setIsInputFocused(false)}
-            // onPress={handlePress}
-            />
-          </Animated.View>
+          {renderContent()}
         </View>
       </SettingsSection>
     );
@@ -129,10 +139,13 @@ export const LiveStreamSection = forwardRef<LiveStreamSectionRef, LiveStreamSect
 LiveStreamSection.displayName = "LiveStreamSection";
 
 const styles = StyleSheet.create({
+  container: {
+    marginBottom: 12,
+  },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 16,
@@ -144,25 +157,45 @@ const styles = StyleSheet.create({
     color: "#888",
     fontStyle: "italic",
   },
-  inputContainer: {
+  infoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#888",
+    marginLeft: 8,
+  },
+  hintText: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 8,
+  },
+  sourcesContainer: {
+    paddingVertical: 8,
+  },
+  sourceCount: {
+    fontSize: 14,
+    color: Colors.dark.primary,
     marginBottom: 12,
   },
-  input: {
-    height: 50,
-    borderWidth: 2,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    backgroundColor: "#3a3a3c",
-    color: "white",
-    borderColor: "transparent",
+  sourceItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#2a2a2c",
+    borderRadius: 6,
+    marginBottom: 6,
   },
-  inputFocused: {
-    borderColor: Colors.dark.primary,
-    shadowColor: Colors.dark.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 5,
+  sourceName: {
+    fontSize: 14,
+    color: "#fff",
+  },
+  sourceStatus: {
+    fontSize: 12,
+    color: "#4CAF50",
   },
 });

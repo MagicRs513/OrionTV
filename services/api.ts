@@ -75,6 +75,22 @@ export interface ServerConfig {
   StorageType: "localstorage" | "redis" | string;
 }
 
+export interface IPTVChannel {
+  id: string;
+  name: string;
+  url: string;
+  logo?: string;
+  group?: string;
+  tvgId?: string;
+}
+
+export interface IPTVSource {
+  id: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+}
+
 export class API {
   public baseURL: string = "https://moontv.lumi210.qzz.io";
 
@@ -234,6 +250,20 @@ export class API {
     const url = `/api/detail?source=${source}&id=${id}`;
     const response = await this._fetch(url);
     return response.json();
+  }
+
+  async getIPTVChannels(): Promise<{ channels: IPTVChannel[] }> {
+    const response = await this._fetch("/api/iptv/channels");
+    return response.json();
+  }
+
+  async getIPTVSources(): Promise<{ sources: IPTVSource[] }> {
+    const response = await this._fetch("/api/iptv/sources");
+    return response.json();
+  }
+
+  getIPTVStreamProxyUrl(originalUrl: string): string {
+    return `${this.baseURL}/api/iptv/stream-proxy?url=${encodeURIComponent(originalUrl)}`;
   }
 }
 
