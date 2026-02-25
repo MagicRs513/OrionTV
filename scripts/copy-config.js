@@ -112,6 +112,18 @@ includeBuild(new File(["node", "--print", "require.resolve('@react-native/gradle
 
 console.log('Copying XML configurations to Android project...');
 copyRecursiveSync(xmlDir, androidAppSrcDir);
+
+const resXmlDir = path.join(androidAppSrcDir, 'main', 'res', 'xml');
+if (!fs.existsSync(resXmlDir)) {
+  fs.mkdirSync(resXmlDir, { recursive: true });
+}
+const networkSecurityConfigSrc = path.join(xmlDir, 'network_security_config.xml');
+if (fs.existsSync(networkSecurityConfigSrc)) {
+  const networkSecurityConfigDest = path.join(resXmlDir, 'network_security_config.xml');
+  fs.copyFileSync(networkSecurityConfigSrc, networkSecurityConfigDest);
+  console.log('Copied network_security_config.xml to res/xml/');
+}
+
 console.log('Done!');
 
 fixSettingsGradle();
