@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text } from "react-native";
+import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text, Alert } from "react-native";
 import LivePlayer from "@/components/LivePlayer";
 import { fetchAndParseM3u, getPlayableUrl, Channel } from "@/services/m3u";
 import { ThemedView } from "@/components/ThemedView";
@@ -14,7 +14,6 @@ import { DeviceUtils } from "@/utils/DeviceUtils";
 export default function LiveScreen() {
   const { m3uUrl } = useSettingsStore();
   
-  // 响应式布局配置
   const responsiveConfig = useResponsiveLayout();
   const commonStyles = getCommonResponsiveStyles(responsiveConfig);
   const { deviceType, spacing } = responsiveConfig;
@@ -26,6 +25,7 @@ export default function LiveScreen() {
 
   const [currentChannelIndex, setCurrentChannelIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
@@ -34,9 +34,26 @@ export default function LiveScreen() {
 
   useEffect(() => {
     const loadChannels = async () => {
-      if (!m3uUrl) return;
+      if (!m3uUrl) {
+        setLoadError('请先设置直播源地址');
+        return;
+      }
+      
       setIsLoading(true);
-      const parsedChannels = await fetchAndParseM3u(m3uUrl);
+      setLoadError(null);
+      setChannels([]);
+      setGroupedChannels({});
+      setChannelGroups([]);
+      
+      const result = await fetchAndParseM3u(m3uUrl);
+      
+      if (result.error) {
+        setLoadError(result.error);
+        setIsLoading(false);
+        return;
+      }
+      
+      const parsedChannels = result.channels;
       setChannels(parsedChannels);
 
       const groups: Record<string, Channel[]> = parsedChannels.reduce((acc, channel) => {
@@ -102,45 +119,98 @@ export default function LiveScreen() {
 
   useTVEventHandler(deviceType === 'tv' ? handleTVEvent : () => {});
 
-  // 动态样式
   const dynamicStyles = createResponsiveStyles(deviceType, spacing);
 
-  const renderLiveContent = () => (
-    <>
-      <LivePlayer 
-        streamUrl={selectedChannelUrl} 
-        channelTitle={channelTitle} 
-        onPlaybackStatusUpdate={() => {}} 
-      />
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isChannelListVisible}
-        onRequestClose={() => setIsChannelListVisible(false)}
-      >
-        <View style={dynamicStyles.modalContainer}>
-          <View style={dynamicStyles.modalContent}>
-            <Text style={dynamicStyles.modalTitle}>选择频道</Text>
-            <View style={dynamicStyles.listContainer}>
-              <View style={dynamicStyles.groupColumn}>
-                <FlatList
-                  data={channelGroups}
-                  keyExtractor={(item, index) => `group-${item}-${index}`}
-                  renderItem={({ item }) => (
-                    <StyledButton
-                      text={item}
-                      onPress={() => setSelectedGroup(item)}
-                      isSelected={selectedGroup === item}
-                      style={dynamicStyles.groupButton}
-                      textStyle={dynamicStyles.groupButtonText}
-                    />
-                  )}
-                />
-              </View>
-              <View style={dynamicStyles.channelColumn}>
-                {isLoading ? (
-                  <ActivityIndicator size="large" />
-                ) : (
+  const renderLiveContent = () => {
+    if (isLoading) {
+      return (
+        <View style={dynamicStyles.loadingContainer}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={dynamicStyles.messageText}>正在加载直播源...</Text>
+        </View>
+      );
+    }
+
+    if (loadError) {
+      return (
+        <View style={dynamicStyles.errorContainer}>
+          <Text style={dynamicStyles.errorText}>加载失败</Text>
+          <Text style={dynamicStyles.errorDetailText}>{loadError}</Text>
+          <StyledButton
+            text="重试"
+            onPress={() => {
+              setLoadError(null);
+              const loadChannels = async () => {
+                if (!m3uUrl) {
+                  setLoadError('请先设置直播源地址');
+                  return;
+                }
+                setIsLoading(true);
+                const result = await fetchAndParseM3u(m3uUrl);
+                if (result.error) {
+                  setLoadError(result.error);
+                  setIsLoading(false);
+                  return;
+                }
+                const parsedChannels = result.channels;
+                setChannels(parsedChannels);
+                const groups: Record<string, Channel[]> = parsedChannels.reduce((acc, channel) => {
+                  const groupName = channel.group || "Other";
+                  if (!acc[groupName]) {
+                    acc[groupName] = [];
+                  }
+                  acc[groupName].push(channel);
+                  return acc;
+                }, {} as Record<string, Channel[]>);
+                setGroupedChannels(groups);
+                setChannelGroups(Object.keys(groups));
+                setSelectedGroup(Object.keys(groups)[0] || "");
+                if (parsedChannels.length > 0) {
+                  showChannelTitle(parsedChannels[0].name);
+                }
+                setIsLoading(false);
+              };
+              loadChannels();
+            }}
+            style={dynamicStyles.retryButton}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <>
+        <LivePlayer 
+          streamUrl={selectedChannelUrl} 
+          channelTitle={channelTitle} 
+          onPlaybackStatusUpdate={() => {}} 
+        />
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isChannelListVisible}
+          onRequestClose={() => setIsChannelListVisible(false)}
+        >
+          <View style={dynamicStyles.modalContainer}>
+            <View style={dynamicStyles.modalContent}>
+              <Text style={dynamicStyles.modalTitle}>选择频道 ({channels.length} 个)</Text>
+              <View style={dynamicStyles.listContainer}>
+                <View style={dynamicStyles.groupColumn}>
+                  <FlatList
+                    data={channelGroups}
+                    keyExtractor={(item, index) => `group-${item}-${index}`}
+                    renderItem={({ item }) => (
+                      <StyledButton
+                        text={item}
+                        onPress={() => setSelectedGroup(item)}
+                        isSelected={selectedGroup === item}
+                        style={dynamicStyles.groupButton}
+                        textStyle={dynamicStyles.groupButtonText}
+                      />
+                    )}
+                  />
+                </View>
+                <View style={dynamicStyles.channelColumn}>
                   <FlatList
                     data={groupedChannels[selectedGroup] || []}
                     keyExtractor={(item, index) => `${item.id}-${item.group}-${index}`}
@@ -155,14 +225,14 @@ export default function LiveScreen() {
                       />
                     )}
                   />
-                )}
+                </View>
+                </View>
               </View>
             </View>
-          </View>
-        </View>
-      </Modal>
-    </>
-  );
+          </Modal>
+        </>
+      );
+    };
 
   const content = (
     <ThemedView style={[commonStyles.container, dynamicStyles.container]}>
@@ -191,6 +261,40 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
   return StyleSheet.create({
     container: {
       flex: 1,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#000',
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#000',
+      padding: spacing * 2,
+    },
+    errorText: {
+      color: '#ff6b6b',
+      fontSize: isMobile ? 18 : 20,
+      fontWeight: 'bold',
+      marginBottom: spacing,
+    },
+    errorDetailText: {
+      color: '#aaa',
+      fontSize: isMobile ? 14 : 16,
+      textAlign: 'center',
+      marginBottom: spacing * 2,
+    },
+    retryButton: {
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+    },
+    messageText: {
+      color: '#fff',
+      fontSize: isMobile ? 14 : 16,
+      marginTop: spacing,
     },
     modalContainer: {
       flex: 1,
