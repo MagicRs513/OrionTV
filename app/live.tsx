@@ -285,8 +285,9 @@ export default function LiveScreen() {
                 </View>
               </View>
             </View>
-          </Modal>
-        </>
+          </View>
+        </Modal>
+      </>
       </>
     );
   };
