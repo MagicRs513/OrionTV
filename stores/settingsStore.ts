@@ -33,7 +33,7 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   apiBaseUrl: "https://moontv.lumi210.qzz.io",
-  m3uUrl: "https://oa.fushanhn.com/result.m3u",
+  m3uUrl: "http://47.113.227.252:3566",
   liveStreamSources: [],
   remoteInputEnabled: false,
   isModalVisible: false,
@@ -47,7 +47,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const settings = await SettingsManager.get();
     set({
       apiBaseUrl: "https://moontv.lumi210.qzz.io",
-      m3uUrl: "https://oa.fushanhn.com/result.m3u",
+      m3uUrl: settings.m3uUrl || "http://47.113.227.252:3566",
       remoteInputEnabled: settings.remoteInputEnabled || false,
       videoSource: settings.videoSource || {
         enabledAll: true,
@@ -74,19 +74,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setApiBaseUrl: () => {
   },
-  setM3uUrl: () => {
-  },
-  setRemoteInputEnabled: (enabled) => set({ remoteInputEnabled: enabled }),
+  setM3uUrl: (url: string) => set({ m3uUrl: url }),
+  setRemoteInputEnabled: (enabled: boolean) => set({ remoteInputEnabled: enabled }),
   setVideoSource: (config) => set({ videoSource: config }),
   saveSettings: async () => {
-    const { remoteInputEnabled, videoSource } = get();
+    const { remoteInputEnabled, videoSource, m3uUrl } = get();
     const currentSettings = await SettingsManager.get()
     const currentApiBaseUrl = currentSettings.apiBaseUrl;
     const processedApiBaseUrl = "https://moontv.lumi210.qzz.io";
 
     await SettingsManager.save({
       apiBaseUrl: processedApiBaseUrl,
-      m3uUrl: "https://oa.fushanhn.com/result.m3u",
+      m3uUrl,
       remoteInputEnabled,
       videoSource,
     });
@@ -95,7 +94,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
     api.setBaseUrl(processedApiBaseUrl);
     set({ isModalVisible: false, apiBaseUrl: processedApiBaseUrl });
-    await get().fetchServerConfig();
   },
   showModal: () => set({ isModalVisible: true }),
   hideModal: () => set({ isModalVisible: false }),
