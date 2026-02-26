@@ -36,8 +36,11 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const selectedChannelUrl = channels.length > 0 && currentSource
-    ? api.getIPTVStreamProxyUrl(channels[currentChannelIndex].url, currentSource.id) 
+  const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
+    ? channels[currentChannelIndex] 
+    : null;
+  const selectedChannelUrl = selectedChannel && currentSource
+    ? api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id) 
     : null;
 
   useEffect(() => {
