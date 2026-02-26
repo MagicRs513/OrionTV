@@ -30,7 +30,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  apiBaseUrl: "https://moontv.lumi210.qzz.io",
+  apiBaseUrl: "https://any.lumi210.ggff.net",
   remoteInputEnabled: false,
   isModalVisible: false,
   serverConfig: null,
@@ -42,14 +42,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     const settings = await SettingsManager.get();
     set({
-      apiBaseUrl: "https://moontv.lumi210.qzz.io",
+      apiBaseUrl: "https://any.lumi210.ggff.net",
       remoteInputEnabled: settings.remoteInputEnabled || false,
       videoSource: settings.videoSource || {
         enabledAll: true,
         sources: {},
       },
     });
-    api.setBaseUrl("https://moontv.lumi210.qzz.io");
+    api.setBaseUrl("https://any.lumi210.ggff.net");
     await get().fetchServerConfig();
   },
   fetchServerConfig: async () => {
@@ -75,7 +75,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const { remoteInputEnabled, videoSource } = get();
     const currentSettings = await SettingsManager.get();
     const currentApiBaseUrl = currentSettings.apiBaseUrl;
-    const processedApiBaseUrl = "https://moontv.lumi210.qzz.io";
+    const processedApiBaseUrl = "https://any.lumi210.ggff.net";
 
     await SettingsManager.save({
       apiBaseUrl: processedApiBaseUrl,

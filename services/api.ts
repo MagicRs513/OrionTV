@@ -92,7 +92,7 @@ export interface IPTVSource {
 }
 
 export class API {
-  public baseURL: string = "https://moontv.lumi210.qzz.io";
+  public baseURL: string = "https://any.lumi210.ggff.net";
 
   constructor(baseURL?: string) {
     if (baseURL) {
