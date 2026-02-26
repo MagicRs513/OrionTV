@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { View, StyleSheet, Text, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Text, ActivityIndicator, ActivityIndicatorProps } from "react-native";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import { useKeepAwake } from "expo-keep-awake";
 
@@ -15,6 +15,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
   const video = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   useKeepAwake();
 
@@ -26,6 +27,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
     if (streamUrl) {
       setIsLoading(true);
       setIsTimeout(false);
+      setIsLoaded(false);
       timeoutRef.current = setTimeout(() => {
         setIsTimeout(true);
         setIsLoading(false);
@@ -33,6 +35,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
     } else {
       setIsLoading(false);
       setIsTimeout(false);
+      setIsLoaded(false);
     }
 
     return () => {
@@ -50,6 +53,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
         }
         setIsLoading(false);
         setIsTimeout(false);
+        setIsLoaded(true);
       } else if (status.isBuffering) {
         setIsLoading(true);
       }
@@ -57,6 +61,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
       if (status.error) {
         setIsLoading(false);
         setIsTimeout(true);
+        setIsLoaded(false);
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
