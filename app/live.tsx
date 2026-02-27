@@ -39,7 +39,7 @@ export default function LiveScreen() {
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
     ? channels[currentChannelIndex] 
     : null;
-  const selectedChannelUrl = selectedChannel && currentSource
+  const streamUrl = selectedChannel && currentSource
     ? api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id) 
     : null;
 
@@ -218,7 +218,7 @@ export default function LiveScreen() {
     return (
       <>
         <LivePlayer 
-          streamUrl={selectedChannelUrl} 
+          streamUrl={streamUrl} 
           channelTitle={channelTitle} 
           onPlaybackStatusUpdate={() => {}} 
         />
