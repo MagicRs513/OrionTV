@@ -122,7 +122,16 @@ export class API {
       throw new Error("API_URL_NOT_SET");
     }
 
-    const response = await fetch(`${this.baseURL}${url}`, options);
+    const authCookies = await AsyncStorage.getItem("authCookies");
+    const headers = {
+      ...options.headers,
+      ...(authCookies ? { Cookie: authCookies } : {}),
+    };
+
+    const response = await fetch(`${this.baseURL}${url}`, {
+      ...options,
+      headers,
+    });
 
     if (response.status === 401) {
       throw new Error("UNAUTHORIZED");
