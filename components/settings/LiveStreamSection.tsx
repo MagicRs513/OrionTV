@@ -3,7 +3,7 @@ import { View, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import { useTVEventHandler } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
-import { useAuthStore } from "@/stores/authStore";
+import useAuthStore from "@/stores/authStore";
 import { api, IPTVSource } from "@/services/api";
 import { useButtonAnimation } from "@/hooks/useAnimation";
 import { Colors } from "@/constants/Colors";
