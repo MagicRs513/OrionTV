@@ -296,7 +296,7 @@ export class API {
   }
 
   getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string): string {
-    return `${this.baseURL}/api/live/stream?url=${encodeURIComponent(originalUrl)}&source=${encodeURIComponent(sourceKey)}`;
+    return `${this.baseURL}/api/proxy/stream?url=${encodeURIComponent(originalUrl)}&moontv-source=${encodeURIComponent(sourceKey)}`;
   }
 }
 
