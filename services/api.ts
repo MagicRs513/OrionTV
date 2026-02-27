@@ -88,7 +88,20 @@ export interface IPTVSource {
   id: string;
   name: string;
   url: string;
-  isActive: boolean;
+  isActive?: boolean;
+  epg?: string;
+  ua?: string;
+  disabled?: boolean;
+}
+
+export interface IPTVSourceResponse {
+  key: string;
+  name: string;
+  url: string;
+  epg?: string;
+  ua?: string;
+  disabled?: boolean;
+  channelNumber?: number;
 }
 
 export class API {
@@ -261,7 +274,16 @@ export class API {
   async getIPTVSources(): Promise<IPTVSource[]> {
     const response = await this._fetch("/api/live/sources");
     const result = await response.json();
-    return result.data || [];
+    const sources = result.data || [];
+    return sources.map((source: IPTVSourceResponse) => ({
+      id: source.key,
+      name: source.name,
+      url: source.url,
+      isActive: !source.disabled,
+      epg: source.epg,
+      ua: source.ua,
+      disabled: source.disabled,
+    }));
   }
 
   getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string): string {
