@@ -295,8 +295,12 @@ export class API {
     }));
   }
 
-  getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string): string {
-    return `${this.baseURL}/api/proxy/stream?url=${encodeURIComponent(originalUrl)}&moontv-source=${encodeURIComponent(sourceKey)}`;
+  getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string, userAgent?: string): string {
+    let url = `${this.baseURL}/api/proxy/stream?url=${encodeURIComponent(originalUrl)}&moontv-source=${encodeURIComponent(sourceKey)}`;
+    if (userAgent) {
+      url += `&ua=${encodeURIComponent(userAgent)}`;
+    }
+    return url;
   }
 }
 

@@ -40,8 +40,9 @@ export default function LiveScreen() {
     ? channels[currentChannelIndex] 
     : null;
   const streamUrl = selectedChannel && currentSource
-    ? api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id) 
+    ? api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id, currentSource.ua) 
     : null;
+  const userAgent = currentSource?.ua || undefined;
 
   useEffect(() => {
     if (isLoggedIn && !isLoginModalVisible) {
@@ -219,7 +220,8 @@ export default function LiveScreen() {
       <>
         <LivePlayer 
           streamUrl={streamUrl} 
-          channelTitle={channelTitle} 
+          channelTitle={channelTitle}
+          userAgent={userAgent}
           onPlaybackStatusUpdate={() => {}} 
         />
         <Modal
