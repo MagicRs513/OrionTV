@@ -19,7 +19,7 @@ const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
 
 const fixStreamUrl = (url: string): string => {
   if (url.startsWith('https://oa.fushanhn.com//')) {
-    return url.replace('https://oa.fushanhn.com//', 'http://47.113.227.252:3566/');
+    return url.replace('https://oa.fushanhn.com//', 'https://oa.fushanhn.com/');
   }
   if (url.startsWith('https://oa.fushanhn.com/')) {
     return url;
