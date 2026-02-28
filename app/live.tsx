@@ -15,7 +15,7 @@ import Logger from "@/utils/Logger";
 
 const logger = Logger.withTag('LiveScreen');
 
-const DEFAULT_M3U_URL = "https://oa.fushanhn.com/result.m3u";
+const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
 
 export default function LiveScreen() {
   const { isLoggedIn, isLoginModalVisible } = useAuthStore();
