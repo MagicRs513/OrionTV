@@ -15,11 +15,14 @@ import Logger from "@/utils/Logger";
 
 const logger = Logger.withTag('LiveScreen');
 
-const DEFAULT_M3U_URL = "https://oa.fushanhn.com/result.m3u";
+const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
 
 const fixStreamUrl = (url: string): string => {
   if (url.startsWith('https://oa.fushanhn.com//')) {
     return url.replace('https://oa.fushanhn.com//', 'http://47.113.227.252:3566/');
+  }
+  if (url.startsWith('https://oa.fushanhn.com/')) {
+    return url;
   }
   return url;
 };
