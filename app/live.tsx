@@ -34,13 +34,17 @@ export default function LiveScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
+  const [useDirectPlay, setUseDirectPlay] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
     ? channels[currentChannelIndex] 
     : null;
+  
   const streamUrl = selectedChannel && currentSource
-    ? api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id, currentSource.ua) 
+    ? (useDirectPlay 
+      ? selectedChannel.url 
+      : api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id, currentSource.ua))
     : null;
   const userAgent = currentSource?.ua || undefined;
 
@@ -224,6 +228,14 @@ export default function LiveScreen() {
           userAgent={userAgent}
           onPlaybackStatusUpdate={() => {}} 
         />
+        <View style={dynamicStyles.directPlayToggle}>
+          <StyledButton
+            text={useDirectPlay ? "代理播放" : "直接播放"}
+            onPress={() => setUseDirectPlay(!useDirectPlay)}
+            style={dynamicStyles.directPlayButton}
+            textStyle={dynamicStyles.directPlayButtonText}
+          />
+        </View>
         <Modal
           animationType="slide"
           transparent={true}
@@ -420,6 +432,22 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
     },
     channelItemText: {
       fontSize: isMobile ? 14 : 12,
+    },
+    directPlayToggle: {
+      position: 'absolute',
+      top: spacing,
+      right: spacing,
+      zIndex: 10,
+    },
+    directPlayButton: {
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      paddingHorizontal: spacing,
+      paddingVertical: spacing / 2,
+      borderRadius: 4,
+    },
+    directPlayButtonText: {
+      fontSize: isMobile ? 12 : 14,
+      color: '#fff',
     },
   });
 };
