@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text } from "react-native";
 import LivePlayer from "@/components/LivePlayer";
 import { api, IPTVChannel, IPTVSource } from "@/services/api";
+import { fetchAndParseM3u } from "@/services/m3u";
 import { ThemedView } from "@/components/ThemedView";
 import { StyledButton } from "@/components/StyledButton";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
@@ -13,6 +14,8 @@ import useAuthStore from "@/stores/authStore";
 import Logger from "@/utils/Logger";
 
 const logger = Logger.withTag('LiveScreen');
+
+const DEFAULT_M3U_URL = "https://oa.fushanhn.com/result.m3u";
 
 export default function LiveScreen() {
   const { isLoggedIn, isLoginModalVisible } = useAuthStore();
@@ -65,8 +68,8 @@ export default function LiveScreen() {
       const sourcesData = await api.getIPTVSources();
       
       if (sourcesData.length === 0) {
-        setLoadError('暂无直播源，请在后台配置');
-        setIsLoading(false);
+        logger.info('No sources from backend, using default M3U URL');
+        await loadDefaultM3U();
         return;
       }
       
@@ -80,8 +83,69 @@ export default function LiveScreen() {
       if (error instanceof Error && error.message === 'UNAUTHORIZED') {
         setLoadError('请先登录');
       } else {
-        setLoadError('加载直播源失败，请检查网络连接');
+        logger.info('Backend failed, trying default M3U URL');
+        await loadDefaultM3U();
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadDefaultM3U = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    
+    try {
+      logger.info(`Loading default M3U from: ${DEFAULT_M3U_URL}`);
+      const result = await fetchAndParseM3u(DEFAULT_M3U_URL);
+      
+      if (result.error || result.channels.length === 0) {
+        setLoadError(result.error || '无法加载直播频道');
+        return;
+      }
+      
+      const defaultSource: IPTVSource = {
+        id: 'default',
+        name: '默认直播源',
+        url: DEFAULT_M3U_URL,
+        isActive: true,
+      };
+      
+      setSources([defaultSource]);
+      setCurrentSource(defaultSource);
+      
+      const channels: IPTVChannel[] = result.channels.map((ch, index) => ({
+        id: ch.id || `ch-${index}`,
+        name: ch.name,
+        url: ch.url,
+        logo: ch.logo,
+        group: ch.group,
+      }));
+      
+      setChannels(channels);
+      
+      const groups: Record<string, IPTVChannel[]> = channels.reduce((acc, channel) => {
+        const groupName = channel.group || "其他";
+        if (!acc[groupName]) {
+          acc[groupName] = [];
+        }
+        acc[groupName].push(channel);
+        return acc;
+      }, {} as Record<string, IPTVChannel[]>);
+      
+      const groupNames = Object.keys(groups);
+      setGroupedChannels(groups);
+      setChannelGroups(groupNames);
+      setSelectedGroup(groupNames[0] || "");
+      
+      if (channels.length > 0) {
+        showChannelTitle(channels[0].name);
+      }
+      
+      logger.info(`Loaded ${channels.length} channels from default M3U`);
+    } catch (error) {
+      logger.error('Failed to load default M3U:', error);
+      setLoadError('加载直播源失败，请检查网络连接');
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +158,25 @@ export default function LiveScreen() {
     setChannelGroups([]);
     
     try {
-      const channelsData = await api.getIPTVChannels(sourceId);
+      let channelsData: IPTVChannel[];
+      
+      if (sourceId === 'default') {
+        const result = await fetchAndParseM3u(DEFAULT_M3U_URL);
+        if (result.error || result.channels.length === 0) {
+          setLoadError(result.error || '该直播源暂无频道');
+          setIsLoadingChannels(false);
+          return;
+        }
+        channelsData = result.channels.map((ch, index) => ({
+          id: ch.id || `ch-${index}`,
+          name: ch.name,
+          url: ch.url,
+          logo: ch.logo,
+          group: ch.group,
+        }));
+      } else {
+        channelsData = await api.getIPTVChannels(sourceId);
+      }
       
       if (channelsData.length === 0) {
         setLoadError('该直播源暂无频道');
