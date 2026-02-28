@@ -15,7 +15,14 @@ import Logger from "@/utils/Logger";
 
 const logger = Logger.withTag('LiveScreen');
 
-const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
+const DEFAULT_M3U_URL = "https://oa.fushanhn.com/result.m3u";
+
+const fixStreamUrl = (url: string): string => {
+  if (url.startsWith('https://oa.fushanhn.com//')) {
+    return url.replace('https://oa.fushanhn.com//', 'http://47.113.227.252:3566/');
+  }
+  return url;
+};
 
 export default function LiveScreen() {
   const { isLoggedIn, isLoginModalVisible } = useAuthStore();
@@ -117,7 +124,7 @@ export default function LiveScreen() {
       const channels: IPTVChannel[] = result.channels.map((ch, index) => ({
         id: ch.id || `ch-${index}`,
         name: ch.name,
-        url: ch.url,
+        url: fixStreamUrl(ch.url),
         logo: ch.logo,
         group: ch.group,
       }));
@@ -170,7 +177,7 @@ export default function LiveScreen() {
         channelsData = result.channels.map((ch, index) => ({
           id: ch.id || `ch-${index}`,
           name: ch.name,
-          url: ch.url,
+          url: fixStreamUrl(ch.url),
           logo: ch.logo,
           group: ch.group,
         }));
