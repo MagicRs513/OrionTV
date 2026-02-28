@@ -37,7 +37,7 @@ export default function LiveScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
-  const [useDirectPlay, setUseDirectPlay] = useState(false);
+  const [useDirectPlay, setUseDirectPlay] = useState(true); // 默认直接播放，绕过代理
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
