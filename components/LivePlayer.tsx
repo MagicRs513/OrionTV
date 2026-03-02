@@ -43,11 +43,17 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         logger.info(`[STREAM] User-Agent: ${userAgent || 'default'}`);
         
         const authCookies = await AsyncStorage.getItem("authCookies");
+        
+        const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        
         const source: VideoSource = {
           uri: streamUrl,
           headers: {
             ...(authCookies ? { Cookie: authCookies } : {}),
-            ...(userAgent ? { "User-Agent": userAgent } : {}),
+            "User-Agent": userAgent || defaultUserAgent,
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
           },
         };
         
@@ -57,6 +63,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         setIsTimeout(false);
         setIsLoaded(false);
         setErrorMessage(null);
+        setRetryCount(0);
         timeoutRef.current = setTimeout(() => {
           logger.error(`[STREAM] Playback timeout after ${PLAYBACK_TIMEOUT}ms`);
           setIsTimeout(true);

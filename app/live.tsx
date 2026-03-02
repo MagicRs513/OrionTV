@@ -24,7 +24,12 @@ const fixStreamUrl = (url: string): string => {
   if (url.startsWith('https://oa.fushanhn.com/')) {
     return url;
   }
-  if (url.startsWith('http://') || url.startsWith('https://')) {
+  if (url.startsWith('http://')) {
+    const httpsUrl = url.replace('http://', 'https://');
+    logger.info(`[URL] Converting HTTP to HTTPS: ${httpsUrl}`);
+    return httpsUrl;
+  }
+  if (url.startsWith('https://')) {
     return url;
   }
   return url;

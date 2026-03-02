@@ -19,6 +19,7 @@
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">fushanhn.com</domain>
         <domain includeSubdomains="true">ggff.net</domain>
+        <domain includeSubdomains="true">hlsztemgsplive.miguvideo.com</domain>
     </domain-config>
     <debug-overrides>
         <trust-anchors>
