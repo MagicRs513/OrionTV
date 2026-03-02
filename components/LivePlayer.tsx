@@ -1,29 +1,39 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, Text, ActivityIndicator, ActivityIndicatorProps } from "react-native";
-import { Video, ResizeMode, AVPlaybackStatus, VideoSource } from "expo-av";
+import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import { useKeepAwake } from "expo-keep-awake";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Logger from '@/utils/Logger';
 
 const logger = Logger.withTag('LivePlayer');
 
+interface VideoSource {
+  uri: string;
+  headers?: Record<string, string>;
+}
+
 interface LivePlayerProps {
   streamUrl: string | null;
   channelTitle?: string | null;
   userAgent?: string;
   onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  autoRetry?: boolean;
 }
 
-const PLAYBACK_TIMEOUT = 30000; // 30 seconds for live streams
+const PLAYBACK_TIMEOUT = 30000;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000;
 
-export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlaybackStatusUpdate }: LivePlayerProps) {
+export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlaybackStatusUpdate, autoRetry = true }: LivePlayerProps) {
   const video = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [videoSource, setVideoSource] = useState<VideoSource | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useKeepAwake();
 
   useEffect(() => {
@@ -60,6 +70,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         setIsTimeout(false);
         setIsLoaded(false);
         setErrorMessage(null);
+        setRetryCount(0);
       }
     };
 
@@ -69,8 +80,36 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
     };
   }, [streamUrl, userAgent]);
+
+  const handleRetry = useCallback(() => {
+    if (retryCount < MAX_RETRIES && autoRetry) {
+      logger.info(`[STREAM] Retrying playback (${retryCount + 1}/${MAX_RETRIES})...`);
+      setRetryCount(retryCount + 1);
+      setIsTimeout(false);
+      setErrorMessage(null);
+      
+      if (video.current) {
+        video.current.unloadAsync().then(() => {
+          retryTimeoutRef.current = setTimeout(() => {
+            if (videoSource) {
+              video.current?.loadAsync(videoSource, { shouldPlay: true });
+            }
+          }, RETRY_DELAY);
+        });
+      }
+    }
+  }, [retryCount, autoRetry, videoSource]);
+
+  useEffect(() => {
+    if (isTimeout && errorMessage && autoRetry && retryCount < MAX_RETRIES) {
+      handleRetry();
+    }
+  }, [isTimeout, errorMessage, autoRetry, retryCount, handleRetry]);
 
   const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
@@ -80,6 +119,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         }
         if (!isLoaded) {
           logger.info(`[STREAM] Playback started successfully`);
+          setRetryCount(0);
         }
         setIsLoading(false);
         setIsTimeout(false);
@@ -91,7 +131,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
       }
     } else {
       if (status.error) {
-        const errorMsg = status.error.message || status.error.toString();
+        const errorMsg = (status.error as any).message || status.error.toString();
         logger.error(`[STREAM] Playback status error: ${errorMsg}`);
         setIsLoading(false);
         setIsTimeout(true);
@@ -114,10 +154,14 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
   }
 
   if (isTimeout) {
+    const canRetry = retryCount < MAX_RETRIES;
     return (
       <View style={styles.container}>
         <Text style={styles.messageText}>{errorMessage || '加载失败，请重试'}</Text>
+        {retryCount > 0 && <Text style={styles.errorDetailText}>已重试 {retryCount} 次</Text>}
         {errorMessage && <Text style={styles.errorDetailText}>{errorMessage}</Text>}
+        {canRetry && <Text style={styles.retryText}>正在自动重试...</Text>}
+        {!canRetry && <Text style={styles.retryText}>已达到最大重试次数</Text>}
       </View>
     );
   }
@@ -190,6 +234,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     paddingHorizontal: 20,
+  },
+  retryText: {
+    color: "#ff9800",
+    fontSize: 14,
+    marginTop: 10,
+    textAlign: "center",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

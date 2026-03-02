@@ -7,9 +7,18 @@
     </base-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">miguvideo.com</domain>
+        <domain includeSubdomains="true">migu.cn</domain>
+        <domain includeSubdomains="true">cmvideo.cn</domain>
+        <domain includeSubdomains="true">live.com</domain>
+        <domain includeSubdomains="true">myqcloud.com</domain>
+        <domain includeSubdomains="true">ksyun.com</domain>
+        <domain includeSubdomains="true">ksyuncdn.com</domain>
+        <domain includeSubdomains="true">qcloud.com</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">fushanhn.com</domain>
+        <domain includeSubdomains="true">ggff.net</domain>
     </domain-config>
     <debug-overrides>
         <trust-anchors>

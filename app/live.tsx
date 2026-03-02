@@ -24,6 +24,9 @@ const fixStreamUrl = (url: string): string => {
   if (url.startsWith('https://oa.fushanhn.com/')) {
     return url;
   }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
   return url;
 };
 
@@ -47,7 +50,7 @@ export default function LiveScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
-  const [useDirectPlay, setUseDirectPlay] = useState(true); // 默认直接播放，绕过代理
+  const [useDirectPlay, setUseDirectPlay] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -318,15 +321,19 @@ export default function LiveScreen() {
           streamUrl={streamUrl} 
           channelTitle={channelTitle}
           userAgent={userAgent}
-          onPlaybackStatusUpdate={() => {}} 
+          onPlaybackStatusUpdate={() => {}}
+          autoRetry={true}
         />
         <View style={dynamicStyles.directPlayToggle}>
           <StyledButton
-            text={useDirectPlay ? "代理播放" : "直接播放"}
+            text={useDirectPlay ? "切换代理播放" : "切换直接播放"}
             onPress={() => setUseDirectPlay(!useDirectPlay)}
             style={dynamicStyles.directPlayButton}
             textStyle={dynamicStyles.directPlayButtonText}
           />
+          <Text style={dynamicStyles.modeHint}>
+            {useDirectPlay ? "直接连接" : "通过服务器代理"}
+          </Text>
         </View>
         <Modal
           animationType="slide"
@@ -530,6 +537,7 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
       top: spacing,
       right: spacing,
       zIndex: 10,
+      alignItems: 'flex-end',
     },
     directPlayButton: {
       backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -540,6 +548,11 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
     directPlayButtonText: {
       fontSize: isMobile ? 12 : 14,
       color: '#fff',
+    },
+    modeHint: {
+      color: '#aaa',
+      fontSize: isMobile ? 10 : 12,
+      marginTop: 4,
     },
   });
 };
