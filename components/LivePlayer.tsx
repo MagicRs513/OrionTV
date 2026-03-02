@@ -24,6 +24,24 @@ const PLAYBACK_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 
+function getExtensionFromUrl(url: string): string {
+  try {
+    const urlPath = url.split('?')[0];
+    const extension = urlPath.split('.').pop()?.toLowerCase();
+    
+    if (extension === 'm3u8') return 'm3u8';
+    if (extension === 'mpd') return 'mpd';
+    if (extension === 'mp4') return 'mp4';
+    if (extension === 'flv') return 'flv';
+    if (extension === 'ts') return 'ts';
+    
+    // 默认返回 m3u8，因为大多数直播流是 HLS
+    return 'm3u8';
+  } catch {
+    return 'm3u8';
+  }
+}
+
 export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlaybackStatusUpdate, autoRetry = true }: LivePlayerProps) {
   const video = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,9 +73,11 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
             "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive",
           },
+          overrideFileExtensionAndroid: getExtensionFromUrl(streamUrl),
         };
         
         logger.info(`[STREAM] Video source prepared with headers: ${JSON.stringify(Object.keys(source.headers || {}))}`);
+        logger.info(`[STREAM] File extension: ${getExtensionFromUrl(streamUrl)}`);
         setVideoSource(source);
         setIsLoading(true);
         setIsTimeout(false);
@@ -181,12 +201,17 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         source={videoSource}
         resizeMode={ResizeMode.CONTAIN}
         shouldPlay
+        isLooping={false}
+        isMuted={false}
+        volume={1.0}
+        rate={1.0}
         onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
         onError={(e) => {
           const errorInfo = e as any;
           const errorMsg = errorInfo?.message || errorInfo?.error?.message || errorInfo?.error?.toString() || JSON.stringify(errorInfo);
           logger.error(`[STREAM] Video onError: ${errorMsg}`);
           logger.error(`[STREAM] Error details:`, errorInfo);
+          logger.error(`[STREAM] Stream URL: ${streamUrl.substring(0, 100)}`);
           setIsTimeout(true);
           setIsLoading(false);
           setErrorMessage(errorMsg);
