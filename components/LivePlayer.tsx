@@ -187,6 +187,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         <Text style={styles.messageText}>{errorMessage || '加载失败，请重试'}</Text>
         {retryCount > 0 && <Text style={styles.errorDetailText}>已重试 {retryCount} 次</Text>}
         {errorMessage && <Text style={styles.errorDetailText}>{errorMessage}</Text>}
+        {streamUrl && <Text style={styles.urlText}>URL: {streamUrl.substring(0, 80)}...</Text>}
         {canRetry && <Text style={styles.retryText}>正在自动重试...</Text>}
         {!canRetry && <Text style={styles.retryText}>已达到最大重试次数</Text>}
       </View>
@@ -266,6 +267,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     paddingHorizontal: 20,
+  },
+  urlText: {
+    color: "#888",
+    fontSize: 10,
+    marginTop: 8,
+    textAlign: "center",
+    paddingHorizontal: 20,
+    fontFamily: "monospace",
   },
   retryText: {
     color: "#ff9800",
