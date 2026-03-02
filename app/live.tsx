@@ -62,11 +62,28 @@ export default function LiveScreen() {
     ? channels[currentChannelIndex] 
     : null;
   
-  const streamUrl = selectedChannel && currentSource
-    ? (useDirectPlay 
-      ? selectedChannel.url 
-      : api.getIPTVStreamProxyUrl(selectedChannel.url, currentSource.id, currentSource.ua))
-    : null;
+  const getStreamUrl = useCallback(() => {
+    if (!selectedChannel || !currentSource) return null;
+    
+    const url = selectedChannel.url;
+    const urlLower = url.toLowerCase();
+    
+    const needsProxy = 
+      !useDirectPlay ||
+      urlLower.includes('miguvideo.com') ||
+      urlLower.includes('migu.cn') ||
+      urlLower.includes('cmvideo.cn') ||
+      urlLower.startsWith('http://');
+    
+    if (needsProxy && !useDirectPlay) {
+      logger.info(`[PROXY] Using proxy for stream to avoid CLEARTEXT`);
+      return api.getIPTVStreamProxyUrl(url, currentSource.id, currentSource.ua);
+    }
+    
+    return fixStreamUrl(url);
+  }, [selectedChannel, currentSource, useDirectPlay]);
+  
+  const streamUrl = getStreamUrl();
   const userAgent = currentSource?.ua || undefined;
 
   useEffect(() => {
