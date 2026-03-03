@@ -22,6 +22,8 @@ interface PlaybackStatusLike {
 
 interface LivePlayerProps {
   streamUrl: string | null;
+  selectedChannelUrl?: string | null;
+  forceRefreshKey?: number;
   channelTitle?: string | null;
   userAgent?: string;
   onPlaybackStatusUpdate: (status: PlaybackStatusLike) => void;
@@ -57,7 +59,7 @@ function getExtensionFromUrl(url: string): string | undefined {
   }
 }
 
-export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlaybackStatusUpdate, onPlaybackError, autoRetry = true }: LivePlayerProps) {
+export default function LivePlayer({ streamUrl, selectedChannelUrl, forceRefreshKey = 0, channelTitle, userAgent, onPlaybackStatusUpdate, onPlaybackError, autoRetry = true }: LivePlayerProps) {
   const video = useRef<Video | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
@@ -154,7 +156,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
     return () => {
       clearTimers();
     };
-  }, [streamUrl, userAgent, clearTimers, schedulePlaybackTimeout]);
+  }, [streamUrl, selectedChannelUrl, forceRefreshKey, userAgent, clearTimers, schedulePlaybackTimeout]);
 
   const handleRetry = useCallback(() => {
     if (retryCount < MAX_RETRIES && autoRetry) {
