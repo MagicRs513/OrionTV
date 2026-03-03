@@ -93,9 +93,10 @@ export default function LiveScreen() {
       urlLower.startsWith('http://');
 
     const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
+    const shouldPreferVideoProxy = currentSource.id === 'default';
     if (isForceProxyChannel || (!useDirectPlay && requiresProxy)) {
       logger.info('[PROXY] Using backend proxy for current channel');
-      if (useVideoProxyFallback) {
+      if (useVideoProxyFallback || shouldPreferVideoProxy) {
         logger.info('[PROXY] Falling back to /api/video-proxy for current channel');
         return {
           streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
@@ -177,6 +178,7 @@ export default function LiveScreen() {
         name: '默认直播源',
         url: DEFAULT_M3U_URL,
         isActive: true,
+        ua: 'AptvPlayer/1.4.10',
       };
       
       setSources([defaultSource]);
@@ -334,6 +336,10 @@ export default function LiveScreen() {
     (message: string) => {
       if (!selectedChannel || !currentSource || isUsingProxy) {
         const normalized = message.toLowerCase();
+        const isExtractorError =
+          normalized.includes('none of the available extractors') ||
+          normalized.includes('could read the stream') ||
+          normalized.includes('could not read the stream');
         const maybeProxyStreamError =
           normalized.includes('response code: 404') ||
           normalized.includes('http 404') ||
@@ -344,6 +350,13 @@ export default function LiveScreen() {
           normalized.includes('source not found') ||
           normalized.includes('upstream error') ||
           normalized.includes('playback failed');
+
+        if (selectedChannel && isUsingProxy && isExtractorError && !useVideoProxyFallback) {
+          logger.warn(`[PROXY] Extractor failed on /api/proxy/stream, retrying with /api/video-proxy: ${selectedChannel.name}`);
+          setUseVideoProxyFallback(true);
+          showChannelTitle(`${selectedChannel.name}（切换备用代理）`);
+          return;
+        }
 
         if (selectedChannel && isUsingProxy && maybeProxyStreamError) {
           logger.warn(`[PROXY] Proxy endpoint failed, fallback to direct play: ${selectedChannel.name}`);
