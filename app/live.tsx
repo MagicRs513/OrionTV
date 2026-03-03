@@ -63,6 +63,7 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [useDirectPlay, setUseDirectPlay] = useState(false);
   const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
+  const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -88,6 +89,14 @@ export default function LiveScreen() {
     const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
     if (isForceProxyChannel || (!useDirectPlay && requiresProxy)) {
       logger.info('[PROXY] Using backend proxy for current channel');
+      if (useVideoProxyFallback) {
+        logger.info('[PROXY] Falling back to /api/video-proxy for current channel');
+        return {
+          streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
+          isUsingProxy: true,
+        };
+      }
+
       return {
         streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
         isUsingProxy: true,
@@ -98,7 +107,7 @@ export default function LiveScreen() {
       streamUrl: fixStreamUrl(originalUrl),
       isUsingProxy: false,
     };
-  }, [selectedChannel, currentSource, useDirectPlay, forceProxyChannelIds]);
+  }, [selectedChannel, currentSource, useDirectPlay, forceProxyChannelIds, useVideoProxyFallback]);
 
   const streamUrl = streamSelection.streamUrl;
   const isUsingProxy = streamSelection.isUsingProxy;
@@ -267,6 +276,7 @@ export default function LiveScreen() {
   const handleSourceChange = async (source: IPTVSource) => {
     setCurrentSource(source);
     setCurrentChannelIndex(0);
+    setUseVideoProxyFallback(false);
     setLoadError(null);
     await loadChannels(source.id);
   };
@@ -281,6 +291,7 @@ export default function LiveScreen() {
     const globalIndex = channels.findIndex((c) => c.id === channel.id);
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
+      setUseVideoProxyFallback(false);
       showChannelTitle(channel.name);
       setIsChannelListVisible(false);
     }
@@ -294,6 +305,7 @@ export default function LiveScreen() {
           ? (currentChannelIndex + 1) % channels.length
           : (currentChannelIndex - 1 + channels.length) % channels.length;
       setCurrentChannelIndex(newIndex);
+      setUseVideoProxyFallback(false);
       showChannelTitle(channels[newIndex].name);
     },
     [channels, currentChannelIndex]
@@ -322,15 +334,28 @@ export default function LiveScreen() {
       const isCleartextError = normalized.includes('cleartext communication') || normalized.includes('unknownserviceexception cleartext');
 
       if (!isCleartextError) {
+        const maybeProxyStreamError =
+          normalized.includes('http 403') ||
+          normalized.includes('forbidden') ||
+          normalized.includes('source not found') ||
+          normalized.includes('upstream error') ||
+          normalized.includes('playback failed');
+
+        if (isUsingProxy && maybeProxyStreamError && !useVideoProxyFallback) {
+          logger.warn(`[PROXY] /api/proxy/stream failed, retrying with /api/video-proxy: ${selectedChannel.name}`);
+          setUseVideoProxyFallback(true);
+          showChannelTitle(`${selectedChannel.name}（切换备用代理）`);
+        }
         return;
       }
 
       logger.warn(`[PROXY] CLEAR-TEXT blocked, fallback to proxy for channel: ${selectedChannel.name}`);
       setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
+      setUseVideoProxyFallback(false);
       setUseDirectPlay(false);
       showChannelTitle(`${selectedChannel.name}（切换代理重试）`);
     },
-    [selectedChannel, currentSource, isUsingProxy]
+    [selectedChannel, currentSource, isUsingProxy, useVideoProxyFallback]
   );
 
   const dynamicStyles = createResponsiveStyles(deviceType, spacing);

@@ -310,6 +310,14 @@ export class API {
     }
     return url;
   }
+
+  getVideoProxyUrl(originalUrl: string, userAgent?: string): string {
+    let url = `${this.baseURL}/api/video-proxy?url=${encodeURIComponent(originalUrl)}`;
+    if (userAgent) {
+      url += `&ua=${encodeURIComponent(userAgent)}`;
+    }
+    return url;
+  }
 }
 
 // 默认实例
