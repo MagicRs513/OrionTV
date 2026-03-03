@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text } from "react-native";
 import LivePlayer from "@/components/LivePlayer";
 import { api, IPTVChannel, IPTVSource } from "@/services/api";
@@ -62,28 +62,35 @@ export default function LiveScreen() {
     ? channels[currentChannelIndex] 
     : null;
   
-  const getStreamUrl = useCallback(() => {
-    if (!selectedChannel || !currentSource) return null;
-    
-    const url = selectedChannel.url;
-    const urlLower = url.toLowerCase();
-    
-    const needsProxy = 
-      !useDirectPlay ||
+  const streamSelection = useMemo(() => {
+    if (!selectedChannel || !currentSource) {
+      return { streamUrl: null as string | null, isUsingProxy: false };
+    }
+
+    const originalUrl = selectedChannel.url;
+    const urlLower = originalUrl.toLowerCase();
+    const requiresProxy =
       urlLower.includes('miguvideo.com') ||
       urlLower.includes('migu.cn') ||
       urlLower.includes('cmvideo.cn') ||
       urlLower.startsWith('http://');
-    
-    if (needsProxy && !useDirectPlay) {
-      logger.info(`[PROXY] Using proxy for stream to avoid CLEARTEXT`);
-      return api.getIPTVStreamProxyUrl(url, currentSource.id, currentSource.ua);
+
+    if (!useDirectPlay && requiresProxy) {
+      logger.info('[PROXY] Using backend proxy for current channel');
+      return {
+        streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
+        isUsingProxy: true,
+      };
     }
-    
-    return fixStreamUrl(url);
+
+    return {
+      streamUrl: fixStreamUrl(originalUrl),
+      isUsingProxy: false,
+    };
   }, [selectedChannel, currentSource, useDirectPlay]);
-  
-  const streamUrl = getStreamUrl();
+
+  const streamUrl = streamSelection.streamUrl;
+  const isUsingProxy = streamSelection.isUsingProxy;
   const userAgent = currentSource?.ua || undefined;
 
   useEffect(() => {
@@ -348,13 +355,13 @@ export default function LiveScreen() {
         />
         <View style={dynamicStyles.directPlayToggle}>
           <StyledButton
-            text={useDirectPlay ? "切换代理播放" : "切换直接播放"}
+            text={useDirectPlay ? "切换智能模式" : "强制直接播放"}
             onPress={() => setUseDirectPlay(!useDirectPlay)}
             style={dynamicStyles.directPlayButton}
             textStyle={dynamicStyles.directPlayButtonText}
           />
           <Text style={dynamicStyles.modeHint}>
-            {useDirectPlay ? "直接连接" : "通过服务器代理"}
+            {isUsingProxy ? "通过服务器代理" : "直接连接"}
           </Text>
         </View>
         <Modal
