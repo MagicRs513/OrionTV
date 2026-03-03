@@ -127,6 +127,17 @@ export default function LiveScreen() {
   const streamUrl = streamSelection.streamUrl;
   const isUsingProxy = streamSelection.isUsingProxy;
   const userAgent = currentSource?.ua || undefined;
+  const webViewStreamUrl = useMemo(() => {
+    if (!streamUrl) {
+      return null;
+    }
+
+    if (isUsingProxy) {
+      return streamUrl;
+    }
+
+    return api.getVideoProxyUrl(streamUrl, userAgent);
+  }, [streamUrl, isUsingProxy, userAgent]);
 
   useEffect(() => {
     if (isLoggedIn && !isLoginModalVisible) {
@@ -484,9 +495,9 @@ export default function LiveScreen() {
 
     return (
       <>
-        {useWebViewFallback && streamUrl ? (
+        {useWebViewFallback && webViewStreamUrl ? (
           <LiveWebViewFallback
-            streamUrl={streamUrl}
+            streamUrl={webViewStreamUrl}
             channelTitle={channelTitle}
             onClose={() => setUseWebViewFallback(false)}
           />
