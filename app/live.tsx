@@ -87,7 +87,7 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
   const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
-  const [useWebViewFallback, setUseWebViewFallback] = useState(false);
+  const [useWebViewFallback, setUseWebViewFallback] = useState(true);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -99,30 +99,12 @@ export default function LiveScreen() {
       return { streamUrl: null as string | null, isUsingProxy: false };
     }
 
-    const originalUrl = selectedChannel.url;
-    const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
-
-    if (isForceProxyChannel) {
-      logger.info('[PROXY] Using backend proxy for current channel');
-      if (useVideoProxyFallback) {
-        logger.info('[PROXY] Falling back to /api/video-proxy for current channel');
-        return {
-          streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
-          isUsingProxy: true,
-        };
-      }
-
-      return {
-        streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
-        isUsingProxy: true,
-      };
-    }
-
+    const originalUrl = fixStreamUrl(selectedChannel.url);
     return {
-      streamUrl: fixStreamUrl(originalUrl),
-      isUsingProxy: false,
+      streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
+      isUsingProxy: true,
     };
-  }, [selectedChannel, currentSource, forceProxyChannelIds, useVideoProxyFallback]);
+  }, [selectedChannel, currentSource]);
 
   const streamUrl = streamSelection.streamUrl;
   const isUsingProxy = streamSelection.isUsingProxy;
@@ -304,7 +286,7 @@ export default function LiveScreen() {
     setCurrentSource(source);
     setCurrentChannelIndex(0);
     setUseVideoProxyFallback(false);
-    setUseWebViewFallback(false);
+    setUseWebViewFallback(true);
     setLoadError(null);
     await loadChannels(source.id);
   };
@@ -320,7 +302,7 @@ export default function LiveScreen() {
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
       setUseVideoProxyFallback(false);
-      setUseWebViewFallback(false);
+      setUseWebViewFallback(true);
       showChannelTitle(channel.name);
       setIsChannelListVisible(false);
     }
@@ -335,7 +317,7 @@ export default function LiveScreen() {
           : (currentChannelIndex - 1 + channels.length) % channels.length;
       setCurrentChannelIndex(newIndex);
       setUseVideoProxyFallback(false);
-      setUseWebViewFallback(false);
+      setUseWebViewFallback(true);
       showChannelTitle(channels[newIndex].name);
     },
     [channels, currentChannelIndex]
@@ -392,13 +374,9 @@ export default function LiveScreen() {
         }
 
         if (selectedChannel && isUsingProxy && maybeProxyStreamError) {
-          logger.warn(`[PROXY] Proxy endpoint failed, fallback to direct play: ${selectedChannel.name}`);
-          setForceProxyChannelIds((prev) => {
-            const next = { ...prev };
-            delete next[selectedChannel.id];
-            return next;
-          });
-          showChannelTitle(`${selectedChannel.name}（代理失败，切换直连）`);
+          logger.warn(`[PROXY] Proxy endpoint failed, fallback to WebView: ${selectedChannel.name}`);
+          setUseWebViewFallback(true);
+          showChannelTitle(`${selectedChannel.name}（代理失败，切换 WebView）`);
         }
         return;
       }
@@ -499,7 +477,7 @@ export default function LiveScreen() {
           <LiveWebViewFallback
             streamUrl={webViewStreamUrl}
             channelTitle={channelTitle}
-            onClose={() => setUseWebViewFallback(false)}
+            onClose={() => setUseWebViewFallback(true)}
           />
         ) : (
           <LivePlayer 
@@ -512,17 +490,7 @@ export default function LiveScreen() {
           />
         )}
         <View style={dynamicStyles.directPlayToggle}>
-          <StyledButton
-            text={useWebViewFallback ? "退出 WebView 兜底" : "启用 WebView 兜底"}
-            onPress={() => setUseWebViewFallback((prev) => !prev)}
-            style={dynamicStyles.webviewFallbackButton}
-            textStyle={dynamicStyles.webviewFallbackButtonText}
-          />
-          <Text style={dynamicStyles.modeHint}>
-            {useWebViewFallback
-              ? "WebView + hls.js 兜底中"
-              : (isUsingProxy ? "通过服务器代理" : "直接连接")}
-          </Text>
+          <Text style={dynamicStyles.modeHint}>WebView + hls.js + video-proxy 模式</Text>
         </View>
         <Modal
           animationType="slide"
