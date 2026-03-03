@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, FlatList, StyleSheet, ActivityIndicator, Modal, useTVEventHandler, HWEvent, Text } from "react-native";
 import LivePlayer from "@/components/LivePlayer";
+import LiveWebViewFallback from "@/components/LiveWebViewFallback";
 import { api, IPTVChannel, IPTVSource } from "@/services/api";
 import { fetchAndParseM3u } from "@/services/m3u";
 import { ThemedView } from "@/components/ThemedView";
@@ -69,6 +70,7 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
   const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
+  const [useWebViewFallback, setUseWebViewFallback] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -274,6 +276,7 @@ export default function LiveScreen() {
     setCurrentSource(source);
     setCurrentChannelIndex(0);
     setUseVideoProxyFallback(false);
+    setUseWebViewFallback(false);
     setLoadError(null);
     await loadChannels(source.id);
   };
@@ -289,6 +292,7 @@ export default function LiveScreen() {
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
       setUseVideoProxyFallback(false);
+      setUseWebViewFallback(false);
       showChannelTitle(channel.name);
       setIsChannelListVisible(false);
     }
@@ -303,6 +307,7 @@ export default function LiveScreen() {
           : (currentChannelIndex - 1 + channels.length) % channels.length;
       setCurrentChannelIndex(newIndex);
       setUseVideoProxyFallback(false);
+      setUseWebViewFallback(false);
       showChannelTitle(channels[newIndex].name);
     },
     [channels, currentChannelIndex]
@@ -329,6 +334,10 @@ export default function LiveScreen() {
           normalized.includes('none of the available extractors') ||
           normalized.includes('could read the stream') ||
           normalized.includes('could not read the stream');
+        const isContainerUnsupportedError =
+          normalized.includes('error_code_parsing_container_unsupported') ||
+          normalized.includes('parsing_container_unsupported') ||
+          normalized.includes('container unsupported');
         const maybeProxyStreamError =
           normalized.includes('response code: 404') ||
           normalized.includes('http 404') ||
@@ -340,10 +349,17 @@ export default function LiveScreen() {
           normalized.includes('upstream error') ||
           normalized.includes('playback failed');
 
-        if (selectedChannel && isUsingProxy && isExtractorError && !useVideoProxyFallback) {
+        if (selectedChannel && isUsingProxy && (isExtractorError || isContainerUnsupportedError) && !useVideoProxyFallback) {
           logger.warn(`[PROXY] Extractor failed on /api/proxy/stream, retrying with /api/video-proxy: ${selectedChannel.name}`);
           setUseVideoProxyFallback(true);
           showChannelTitle(`${selectedChannel.name}（切换备用代理）`);
+          return;
+        }
+
+        if (selectedChannel && isUsingProxy && isContainerUnsupportedError && useVideoProxyFallback) {
+          logger.warn(`[PROXY] /api/video-proxy container unsupported, fallback to WebView: ${selectedChannel.name}`);
+          setUseWebViewFallback(true);
+          showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
           return;
         }
 
@@ -451,17 +467,33 @@ export default function LiveScreen() {
 
     return (
       <>
-        <LivePlayer 
-          streamUrl={streamUrl} 
-          channelTitle={channelTitle}
-          userAgent={userAgent}
-          onPlaybackStatusUpdate={() => {}}
-          onPlaybackError={handlePlaybackError}
-          autoRetry={true}
-        />
+        {useWebViewFallback && streamUrl ? (
+          <LiveWebViewFallback
+            streamUrl={streamUrl}
+            channelTitle={channelTitle}
+            onClose={() => setUseWebViewFallback(false)}
+          />
+        ) : (
+          <LivePlayer 
+            streamUrl={streamUrl} 
+            channelTitle={channelTitle}
+            userAgent={userAgent}
+            onPlaybackStatusUpdate={() => {}}
+            onPlaybackError={handlePlaybackError}
+            autoRetry={true}
+          />
+        )}
         <View style={dynamicStyles.directPlayToggle}>
+          <StyledButton
+            text={useWebViewFallback ? "退出 WebView 兜底" : "启用 WebView 兜底"}
+            onPress={() => setUseWebViewFallback((prev) => !prev)}
+            style={dynamicStyles.webviewFallbackButton}
+            textStyle={dynamicStyles.webviewFallbackButtonText}
+          />
           <Text style={dynamicStyles.modeHint}>
-            {isUsingProxy ? "通过服务器代理" : "直接连接"}
+            {useWebViewFallback
+              ? "WebView + hls.js 兜底中"
+              : (isUsingProxy ? "通过服务器代理" : "直接连接")}
           </Text>
         </View>
         <Modal
@@ -682,6 +714,16 @@ const createResponsiveStyles = (deviceType: string, spacing: number) => {
       color: '#aaa',
       fontSize: isMobile ? 10 : 12,
       marginTop: 4,
+    },
+    webviewFallbackButton: {
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      paddingHorizontal: spacing,
+      paddingVertical: spacing / 2,
+      borderRadius: 4,
+    },
+    webviewFallbackButtonText: {
+      fontSize: isMobile ? 12 : 14,
+      color: '#fff',
     },
   });
 };
