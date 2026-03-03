@@ -55,9 +55,7 @@ const fixStreamUrl = (url: string): string => {
     return normalizeFushanChannelPath(url);
   }
   if (url.startsWith('http://')) {
-    const httpsUrl = url.replace('http://', 'https://');
-    logger.info(`[URL] Converting HTTP to HTTPS: ${httpsUrl}`);
-    return normalizeFushanChannelPath(httpsUrl);
+    return normalizeFushanChannelPath(url);
   }
   if (url.startsWith('https://')) {
     return normalizeFushanChannelPath(url);
@@ -87,7 +85,7 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
   const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
-  const [useWebViewFallback, setUseWebViewFallback] = useState(false);
+  const [useWebViewFallback, setUseWebViewFallback] = useState(true);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -101,7 +99,7 @@ export default function LiveScreen() {
 
     const originalUrl = fixStreamUrl(selectedChannel.url);
     return {
-      streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
+      streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
       isUsingProxy: true,
     };
   }, [selectedChannel, currentSource]);
@@ -135,7 +133,7 @@ export default function LiveScreen() {
     const originalUrl = fixStreamUrl(selectedChannel.url);
     const streamProxy = api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua);
     const videoProxy = api.getVideoProxyUrl(originalUrl, currentSource.ua);
-    return [streamProxy, videoProxy];
+    return [videoProxy, streamProxy];
   }, [selectedChannel, currentSource]);
 
   useEffect(() => {
@@ -303,7 +301,7 @@ export default function LiveScreen() {
     setCurrentSource(source);
     setCurrentChannelIndex(0);
     setUseVideoProxyFallback(false);
-    setUseWebViewFallback(false);
+    setUseWebViewFallback(true);
     setLoadError(null);
     await loadChannels(source.id);
   };
@@ -319,7 +317,7 @@ export default function LiveScreen() {
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
       setUseVideoProxyFallback(false);
-      setUseWebViewFallback(false);
+      setUseWebViewFallback(true);
       showChannelTitle(channel.name);
       setIsChannelListVisible(false);
     }
@@ -334,7 +332,7 @@ export default function LiveScreen() {
           : (currentChannelIndex - 1 + channels.length) % channels.length;
       setCurrentChannelIndex(newIndex);
       setUseVideoProxyFallback(false);
-      setUseWebViewFallback(false);
+      setUseWebViewFallback(true);
       showChannelTitle(channels[newIndex].name);
     },
     [channels, currentChannelIndex]
@@ -365,6 +363,9 @@ export default function LiveScreen() {
           normalized.includes('error_code_parsing_container_unsupported') ||
           normalized.includes('parsing_container_unsupported') ||
           normalized.includes('container unsupported');
+        const isCleartextError =
+          normalized.includes('cleartext communication') ||
+          normalized.includes('unknownserviceexception cleartext');
         const maybeProxyStreamError =
           normalized.includes('response code: 404') ||
           normalized.includes('http 404') ||
@@ -385,6 +386,13 @@ export default function LiveScreen() {
 
         if (selectedChannel && isUsingProxy && isExtractorError && useVideoProxyFallback) {
           logger.warn(`[PROXY] /api/video-proxy extractor failed, fallback to WebView: ${selectedChannel.name}`);
+          setUseWebViewFallback(true);
+          showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
+          return;
+        }
+
+        if (selectedChannel && isUsingProxy && isCleartextError) {
+          logger.warn(`[PROXY] Cleartext blocked in player, fallback to WebView: ${selectedChannel.name}`);
           setUseWebViewFallback(true);
           showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
           return;
@@ -504,7 +512,7 @@ export default function LiveScreen() {
             streamUrl={webViewStreamUrl}
             fallbackUrls={webViewFallbackUrls}
             channelTitle={channelTitle}
-            onClose={() => setUseWebViewFallback(false)}
+            onClose={() => setUseWebViewFallback(true)}
           />
         ) : (
           <LivePlayer 
