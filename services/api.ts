@@ -296,7 +296,15 @@ export class API {
   }
 
   getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string, userAgent?: string): string {
-    let url = `${this.baseURL}/api/proxy/stream?url=${encodeURIComponent(originalUrl)}&moontv-source=${encodeURIComponent(sourceKey)}`;
+    const encodedOriginalUrl = encodeURIComponent(originalUrl);
+    const encodedSourceKey = encodeURIComponent(sourceKey);
+
+    let url = `${this.baseURL}/api/proxy/stream?url=${encodedOriginalUrl}`;
+    // 兼容不同版本后端对直播源参数名的识别
+    url += `&moontv-source=${encodedSourceKey}`;
+    url += `&decotv-source=${encodedSourceKey}`;
+    url += `&source=${encodedSourceKey}`;
+
     if (userAgent) {
       url += `&ua=${encodeURIComponent(userAgent)}`;
     }
