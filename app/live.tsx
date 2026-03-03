@@ -333,6 +333,28 @@ export default function LiveScreen() {
   const handlePlaybackError = useCallback(
     (message: string) => {
       if (!selectedChannel || !currentSource || isUsingProxy) {
+        const normalized = message.toLowerCase();
+        const maybeProxyStreamError =
+          normalized.includes('response code: 404') ||
+          normalized.includes('http 404') ||
+          normalized.includes('http 403') ||
+          normalized.includes('forbidden') ||
+          normalized.includes('/api/proxy/stream') ||
+          normalized.includes('/api/video-proxy') ||
+          normalized.includes('source not found') ||
+          normalized.includes('upstream error') ||
+          normalized.includes('playback failed');
+
+        if (selectedChannel && isUsingProxy && maybeProxyStreamError) {
+          logger.warn(`[PROXY] Proxy endpoint failed, fallback to direct play: ${selectedChannel.name}`);
+          setUseDirectPlay(true);
+          setForceProxyChannelIds((prev) => {
+            const next = { ...prev };
+            delete next[selectedChannel.id];
+            return next;
+          });
+          showChannelTitle(`${selectedChannel.name}（代理失败，切换直连）`);
+        }
         return;
       }
 
