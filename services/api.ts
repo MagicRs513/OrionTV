@@ -316,6 +316,7 @@ export class API {
     if (userAgent) {
       url += `&ua=${encodeURIComponent(userAgent)}`;
     }
+    url += `&moontv-source=default`;
     return url;
   }
 }
