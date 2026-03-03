@@ -19,31 +19,48 @@ const logger = Logger.withTag('LiveScreen');
 const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
 
 const fixStreamUrl = (url: string): string => {
+  const normalizeFushanChannelPath = (rawUrl: string): string => {
+    try {
+      const parsed = new URL(rawUrl);
+      const isFushanHost = parsed.hostname === 'oa.fushanhn.com';
+      const isNumericChannelPath = /^\/\d+$/.test(parsed.pathname);
+
+      if (isFushanHost && isNumericChannelPath) {
+        parsed.pathname = `${parsed.pathname}/`;
+        return parsed.toString();
+      }
+
+      return rawUrl;
+    } catch {
+      return rawUrl;
+    }
+  };
+
   if (url.includes('fushanhn.comt/')) {
     const normalizedUrl = url.replace('fushanhn.comt/', 'fushanhn.com/');
     logger.warn(`[URL] Fixing possible domain typo: ${normalizedUrl}`);
-    return normalizedUrl;
+    return normalizeFushanChannelPath(normalizedUrl);
   }
 
   if (url.includes('fushanhn.con/')) {
     const normalizedUrl = url.replace('fushanhn.con/', 'fushanhn.com/');
     logger.warn(`[URL] Fixing possible domain typo: ${normalizedUrl}`);
-    return normalizedUrl;
+    return normalizeFushanChannelPath(normalizedUrl);
   }
 
   if (url.startsWith('https://oa.fushanhn.com//')) {
-    return url.replace('https://oa.fushanhn.com//', 'https://oa.fushanhn.com/');
+    return normalizeFushanChannelPath(url.replace('https://oa.fushanhn.com//', 'https://oa.fushanhn.com/'));
   }
   if (url.startsWith('https://oa.fushanhn.com/')) {
-    return url;
+    return normalizeFushanChannelPath(url);
   }
   if (url.startsWith('http://')) {
     const httpsUrl = url.replace('http://', 'https://');
     logger.info(`[URL] Converting HTTP to HTTPS: ${httpsUrl}`);
-    return httpsUrl;
+    return normalizeFushanChannelPath(httpsUrl);
   }
   if (url.startsWith('https://')) {
-    return url;
+    return normalizeFushanChannelPath(url);
   }
   return url;
 };
