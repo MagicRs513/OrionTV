@@ -100,30 +100,11 @@ export default function LiveScreen() {
     }
 
     const originalUrl = fixStreamUrl(selectedChannel.url);
-    const isInsecureHttp = /^http:\/\//i.test(originalUrl);
-    const isLikelyMiguStream = originalUrl.includes('miguvideo.com');
-    const shouldPreferProxy = isInsecureHttp || isLikelyMiguStream;
-
-    const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
-    if (isForceProxyChannel || shouldPreferProxy) {
-      if (useVideoProxyFallback) {
-        return {
-          streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
-          isUsingProxy: true,
-        };
-      }
-
-      return {
-        streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
-        isUsingProxy: true,
-      };
-    }
-
     return {
-      streamUrl: originalUrl,
-      isUsingProxy: false,
+      streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
+      isUsingProxy: true,
     };
-  }, [selectedChannel, currentSource, forceProxyChannelIds, useVideoProxyFallback]);
+  }, [selectedChannel, currentSource]);
 
   const streamUrl = streamSelection.streamUrl;
   const isUsingProxy = streamSelection.isUsingProxy;
@@ -417,15 +398,9 @@ export default function LiveScreen() {
         }
 
         if (selectedChannel && isUsingProxy && maybeProxyStreamError) {
-          logger.warn(`[PROXY] Proxy endpoint failed, fallback to direct play: ${selectedChannel.name}`);
-          setForceProxyChannelIds((prev) => {
-            const next = { ...prev };
-            delete next[selectedChannel.id];
-            return next;
-          });
-          setUseVideoProxyFallback(false);
-          setUseWebViewFallback(false);
-          showChannelTitle(`${selectedChannel.name}（代理失败，切换直连）`);
+          logger.warn(`[PROXY] Proxy endpoint failed, fallback to WebView: ${selectedChannel.name}`);
+          setUseWebViewFallback(true);
+          showChannelTitle(`${selectedChannel.name}（代理失败，切换 WebView）`);
         }
         return;
       }
@@ -547,7 +522,7 @@ export default function LiveScreen() {
           <Text style={dynamicStyles.modeHint}>
             {useWebViewFallback
               ? "WebView + hls.js 兜底"
-              : (isUsingProxy ? "代理直放模式" : "直连模式")}
+              : "代理直放模式"}
           </Text>
         </View>
         <Modal
