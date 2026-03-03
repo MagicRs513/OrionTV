@@ -101,7 +101,7 @@ export default function LiveScreen() {
 
     const originalUrl = fixStreamUrl(selectedChannel.url);
     return {
-      streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
+      streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
       isUsingProxy: true,
     };
   }, [selectedChannel, currentSource]);
@@ -120,6 +120,17 @@ export default function LiveScreen() {
 
     return api.getVideoProxyUrl(streamUrl, userAgent);
   }, [streamUrl, isUsingProxy, userAgent]);
+
+  const webViewFallbackUrls = useMemo(() => {
+    if (!selectedChannel || !currentSource) {
+      return [] as string[];
+    }
+
+    const originalUrl = fixStreamUrl(selectedChannel.url);
+    const streamProxy = api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua);
+    const videoProxy = api.getVideoProxyUrl(originalUrl, currentSource.ua);
+    return [streamProxy, videoProxy];
+  }, [selectedChannel, currentSource]);
 
   useEffect(() => {
     if (isLoggedIn && !isLoginModalVisible) {
@@ -476,6 +487,7 @@ export default function LiveScreen() {
         {useWebViewFallback && webViewStreamUrl ? (
           <LiveWebViewFallback
             streamUrl={webViewStreamUrl}
+            fallbackUrls={webViewFallbackUrls}
             channelTitle={channelTitle}
             onClose={() => setUseWebViewFallback(true)}
           />
