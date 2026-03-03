@@ -67,7 +67,6 @@ export default function LiveScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
-  const [useDirectPlay, setUseDirectPlay] = useState(false);
   const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
   const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
@@ -82,21 +81,11 @@ export default function LiveScreen() {
     }
 
     const originalUrl = selectedChannel.url;
-    const urlLower = originalUrl.toLowerCase();
-    const requiresProxy =
-      urlLower.includes('fushanhn.com') ||
-      urlLower.includes('fushanhn.con') ||
-      urlLower.includes('ggff.net') ||
-      urlLower.includes('miguvideo.com') ||
-      urlLower.includes('migu.cn') ||
-      urlLower.includes('cmvideo.cn') ||
-      urlLower.startsWith('http://');
-
     const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
-    const shouldPreferVideoProxy = currentSource.id === 'default';
-    if (isForceProxyChannel || (!useDirectPlay && requiresProxy)) {
+
+    if (isForceProxyChannel) {
       logger.info('[PROXY] Using backend proxy for current channel');
-      if (useVideoProxyFallback || shouldPreferVideoProxy) {
+      if (useVideoProxyFallback) {
         logger.info('[PROXY] Falling back to /api/video-proxy for current channel');
         return {
           streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
@@ -114,7 +103,7 @@ export default function LiveScreen() {
       streamUrl: fixStreamUrl(originalUrl),
       isUsingProxy: false,
     };
-  }, [selectedChannel, currentSource, useDirectPlay, forceProxyChannelIds, useVideoProxyFallback]);
+  }, [selectedChannel, currentSource, forceProxyChannelIds, useVideoProxyFallback]);
 
   const streamUrl = streamSelection.streamUrl;
   const isUsingProxy = streamSelection.isUsingProxy;
@@ -360,7 +349,6 @@ export default function LiveScreen() {
 
         if (selectedChannel && isUsingProxy && maybeProxyStreamError) {
           logger.warn(`[PROXY] Proxy endpoint failed, fallback to direct play: ${selectedChannel.name}`);
-          setUseDirectPlay(true);
           setForceProxyChannelIds((prev) => {
             const next = { ...prev };
             delete next[selectedChannel.id];
@@ -396,7 +384,6 @@ export default function LiveScreen() {
       logger.warn(`[PROXY] CLEAR-TEXT blocked, fallback to proxy for channel: ${selectedChannel.name}`);
       setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
       setUseVideoProxyFallback(false);
-      setUseDirectPlay(false);
       showChannelTitle(`${selectedChannel.name}（切换代理重试）`);
     },
     [selectedChannel, currentSource, isUsingProxy, useVideoProxyFallback]
@@ -456,12 +443,6 @@ export default function LiveScreen() {
           autoRetry={true}
         />
         <View style={dynamicStyles.directPlayToggle}>
-          <StyledButton
-            text={useDirectPlay ? "切换智能模式" : "强制直接播放"}
-            onPress={() => setUseDirectPlay(!useDirectPlay)}
-            style={dynamicStyles.directPlayButton}
-            textStyle={dynamicStyles.directPlayButtonText}
-          />
           <Text style={dynamicStyles.modeHint}>
             {isUsingProxy ? "通过服务器代理" : "直接连接"}
           </Text>
