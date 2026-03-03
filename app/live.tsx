@@ -360,6 +360,15 @@ export default function LiveScreen() {
       }
 
       const normalized = message.toLowerCase();
+      const isNetworkConnectionError =
+        normalized.includes('error_code_io_network_connection_failed') ||
+        normalized.includes('network connection failed') ||
+        normalized.includes('failed to connect') ||
+        normalized.includes('connection refused') ||
+        normalized.includes('connection reset') ||
+        normalized.includes('unknownhostexception') ||
+        normalized.includes('sslhandshakeexception') ||
+        normalized.includes('unable to connect');
       const isCleartextError = normalized.includes('cleartext communication') || normalized.includes('unknownserviceexception cleartext');
 
       if (!isCleartextError) {
@@ -372,6 +381,14 @@ export default function LiveScreen() {
           normalized.includes('source not found') ||
           normalized.includes('upstream error') ||
           normalized.includes('playback failed');
+
+        if (!isUsingProxy && isNetworkConnectionError) {
+          logger.warn(`[PROXY] Direct connection failed, fallback to proxy for channel: ${selectedChannel.name}`);
+          setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
+          setUseVideoProxyFallback(false);
+          showChannelTitle(`${selectedChannel.name}（直连失败，切换代理）`);
+          return;
+        }
 
         if (isUsingProxy && maybeProxyStreamError && !useVideoProxyFallback) {
           logger.warn(`[PROXY] /api/proxy/stream failed, retrying with /api/video-proxy: ${selectedChannel.name}`);
