@@ -18,6 +18,12 @@ const logger = Logger.withTag('LiveScreen');
 const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
 
 const fixStreamUrl = (url: string): string => {
+  if (url.includes('fushanhn.comt/')) {
+    const normalizedUrl = url.replace('fushanhn.comt/', 'fushanhn.com/');
+    logger.warn(`[URL] Fixing possible domain typo: ${normalizedUrl}`);
+    return normalizedUrl;
+  }
+
   if (url.includes('fushanhn.con/')) {
     const normalizedUrl = url.replace('fushanhn.con/', 'fushanhn.com/');
     logger.warn(`[URL] Fixing possible domain typo: ${normalizedUrl}`);
@@ -335,8 +341,11 @@ export default function LiveScreen() {
 
       if (!isCleartextError) {
         const maybeProxyStreamError =
+          normalized.includes('response code: 404') ||
+          normalized.includes('http 404') ||
           normalized.includes('http 403') ||
           normalized.includes('forbidden') ||
+          normalized.includes('/api/proxy/stream') ||
           normalized.includes('source not found') ||
           normalized.includes('upstream error') ||
           normalized.includes('playback failed');
