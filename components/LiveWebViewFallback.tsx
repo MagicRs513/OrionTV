@@ -4,6 +4,7 @@ import { WebView } from "react-native-webview";
 
 interface LiveWebViewFallbackProps {
   streamUrl: string;
+  fallbackUrls?: string[];
   channelTitle?: string | null;
   onClose?: () => void;
 }
@@ -15,10 +16,11 @@ function escapeForTemplate(value: string): string {
     .replace(/\$/g, "\\$");
 }
 
-export default function LiveWebViewFallback({ streamUrl, channelTitle, onClose }: LiveWebViewFallbackProps) {
+export default function LiveWebViewFallback({ streamUrl, fallbackUrls, channelTitle, onClose }: LiveWebViewFallbackProps) {
   const html = useMemo(() => {
-    const safeUrl = escapeForTemplate(streamUrl);
     const safeTitle = escapeForTemplate(channelTitle || "直播");
+    const urls = [streamUrl, ...(fallbackUrls || []).filter((url) => url && url !== streamUrl)];
+    const safeUrlsJson = JSON.stringify(urls).replace(/</g, "\\u003c");
     return `<!DOCTYPE html>
 <html>
   <head>
@@ -38,7 +40,9 @@ export default function LiveWebViewFallback({ streamUrl, channelTitle, onClose }
     <video id="player" controls autoplay playsinline webkit-playsinline></video>
     <script>
       (function () {
-        var url = "${safeUrl}";
+        var urls = ${safeUrlsJson};
+        var currentIndex = 0;
+        var hls = null;
         var video = document.getElementById("player");
         var errorBox = document.getElementById("error");
 
@@ -47,36 +51,78 @@ export default function LiveWebViewFallback({ streamUrl, channelTitle, onClose }
           errorBox.textContent = msg;
         }
 
-        function playDirect() {
+        function clearError() {
+          errorBox.style.display = "none";
+          errorBox.textContent = "";
+        }
+
+        function currentUrl() {
+          return urls[currentIndex] || urls[0];
+        }
+
+        function nextUrl() {
+          if (currentIndex + 1 >= urls.length) {
+            return false;
+          }
+          currentIndex += 1;
+          return true;
+        }
+
+        function playDirect(url) {
           video.src = url;
+          clearError();
           video.play().catch(function (e) { showError("播放失败: " + (e && e.message ? e.message : e)); });
         }
 
-        try {
-          if (window.Hls && window.Hls.isSupported()) {
-            var hls = new window.Hls({ lowLatencyMode: true, backBufferLength: 90 });
-            hls.loadSource(url);
-            hls.attachMedia(video);
-            hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
-              video.play().catch(function (e) { showError("自动播放失败: " + (e && e.message ? e.message : e)); });
-            });
-            hls.on(window.Hls.Events.ERROR, function (_event, data) {
-              if (data && data.fatal) {
-                showError("HLS 错误: " + (data.type || "unknown"));
-              }
-            });
-            return;
+        function destroyHls() {
+          if (hls) {
+            try {
+              hls.destroy();
+            } catch (_e) {}
+            hls = null;
           }
-        } catch (e) {
-          showError("hls.js 初始化失败，改用直连");
         }
 
-        playDirect();
+        function tryPlayCurrent() {
+          var url = currentUrl();
+          if (!url) {
+            showError("无可用播放地址");
+            return;
+          }
+
+          destroyHls();
+
+          try {
+            if (window.Hls && window.Hls.isSupported()) {
+              hls = new window.Hls({ lowLatencyMode: true, backBufferLength: 90 });
+              hls.loadSource(url);
+              hls.attachMedia(video);
+              hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+                clearError();
+                video.play().catch(function (e) { showError("自动播放失败: " + (e && e.message ? e.message : e)); });
+              });
+              hls.on(window.Hls.Events.ERROR, function (_event, data) {
+                if (data && data.fatal) {
+                  if (nextUrl()) {
+                    tryPlayCurrent();
+                    return;
+                  }
+                  showError("HLS 错误: " + (data.type || "unknown"));
+                }
+              });
+              return;
+            }
+          } catch (_e) {}
+
+          playDirect(url);
+        }
+
+        tryPlayCurrent();
       })();
     </script>
   </body>
 </html>`;
-  }, [streamUrl, channelTitle]);
+  }, [streamUrl, fallbackUrls, channelTitle]);
 
   return (
     <View style={styles.container}>

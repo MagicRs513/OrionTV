@@ -6,6 +6,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Logger from "@/utils/Logger";
 
 const logger = Logger.withTag('SettingsStore');
+const DEFAULT_API_BASE_URL = "https://any.lumi210.ggff.net";
+
+const normalizeApiBaseUrl = (url: string): string => {
+  const trimmed = url.trim();
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+};
 
 interface SettingsState {
   apiBaseUrl: string;
@@ -30,7 +36,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  apiBaseUrl: "https://any.lumi210.ggff.net",
+  apiBaseUrl: DEFAULT_API_BASE_URL,
   remoteInputEnabled: false,
   isModalVisible: false,
   serverConfig: null,
@@ -41,15 +47,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   loadSettings: async () => {
     const settings = await SettingsManager.get();
+    const savedApiBaseUrl = settings.apiBaseUrl || DEFAULT_API_BASE_URL;
+    const processedApiBaseUrl = normalizeApiBaseUrl(savedApiBaseUrl);
+
     set({
-      apiBaseUrl: "https://any.lumi210.ggff.net",
+      apiBaseUrl: processedApiBaseUrl,
       remoteInputEnabled: settings.remoteInputEnabled || false,
       videoSource: settings.videoSource || {
         enabledAll: true,
         sources: {},
       },
     });
-    api.setBaseUrl("https://any.lumi210.ggff.net");
+    api.setBaseUrl(processedApiBaseUrl);
     await get().fetchServerConfig();
   },
   fetchServerConfig: async () => {
@@ -67,15 +76,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({ isLoadingServerConfig: false });
     }
   },
-  setApiBaseUrl: () => {
+  setApiBaseUrl: (url: string) => {
+    const nextApiBaseUrl = normalizeApiBaseUrl(url || DEFAULT_API_BASE_URL);
+    set({ apiBaseUrl: nextApiBaseUrl });
+    api.setBaseUrl(nextApiBaseUrl);
   },
   setRemoteInputEnabled: (enabled: boolean) => set({ remoteInputEnabled: enabled }),
   setVideoSource: (config) => set({ videoSource: config }),
   saveSettings: async () => {
-    const { remoteInputEnabled, videoSource } = get();
+    const { apiBaseUrl, remoteInputEnabled, videoSource } = get();
     const currentSettings = await SettingsManager.get();
     const currentApiBaseUrl = currentSettings.apiBaseUrl;
-    const processedApiBaseUrl = "https://any.lumi210.ggff.net";
+    const processedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl || DEFAULT_API_BASE_URL);
 
     await SettingsManager.save({
       apiBaseUrl: processedApiBaseUrl,
