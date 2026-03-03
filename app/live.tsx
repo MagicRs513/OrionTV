@@ -100,9 +100,12 @@ export default function LiveScreen() {
     }
 
     const originalUrl = fixStreamUrl(selectedChannel.url);
+    const isInsecureHttp = /^http:\/\//i.test(originalUrl);
+    const isLikelyMiguStream = originalUrl.includes('miguvideo.com');
+    const shouldPreferProxy = isInsecureHttp || isLikelyMiguStream;
 
     const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
-    if (isForceProxyChannel) {
+    if (isForceProxyChannel || shouldPreferProxy) {
       if (useVideoProxyFallback) {
         return {
           streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
@@ -396,6 +399,13 @@ export default function LiveScreen() {
           logger.warn(`[PROXY] Extractor failed on /api/proxy/stream, retrying with /api/video-proxy: ${selectedChannel.name}`);
           setUseVideoProxyFallback(true);
           showChannelTitle(`${selectedChannel.name}（切换备用代理）`);
+          return;
+        }
+
+        if (selectedChannel && isUsingProxy && isExtractorError && useVideoProxyFallback) {
+          logger.warn(`[PROXY] /api/video-proxy extractor failed, fallback to WebView: ${selectedChannel.name}`);
+          setUseWebViewFallback(true);
+          showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
           return;
         }
 
