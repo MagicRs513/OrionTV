@@ -10,6 +10,7 @@ const logger = Logger.withTag('LivePlayer');
 interface VideoSource {
   uri: string;
   headers?: Record<string, string>;
+  overrideFileExtensionAndroid?: string;
 }
 
 interface LivePlayerProps {
@@ -25,7 +26,7 @@ const PLAYBACK_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 
-function getExtensionFromUrl(url: string): string {
+function getExtensionFromUrl(url: string): string | undefined {
   try {
     const urlPath = url.split('?')[0];
     const extension = urlPath.split('.').pop()?.toLowerCase();
@@ -35,11 +36,17 @@ function getExtensionFromUrl(url: string): string {
     if (extension === 'mp4') return 'mp4';
     if (extension === 'flv') return 'flv';
     if (extension === 'ts') return 'ts';
+    if (extension === 'm3u') return 'm3u8';
     
-    // 默认返回 m3u8，因为大多数直播流是 HLS
-    return 'm3u8';
+    const normalizedUrl = url.toLowerCase();
+    if (normalizedUrl.includes('m3u8')) return 'm3u8';
+    if (normalizedUrl.includes('mpd')) return 'mpd';
+    if (normalizedUrl.includes('format=flv') || normalizedUrl.includes('type=flv')) return 'flv';
+    if (normalizedUrl.includes('format=ts') || normalizedUrl.includes('type=ts')) return 'ts';
+
+    return undefined;
   } catch {
-    return 'm3u8';
+    return undefined;
   }
 }
 
@@ -65,6 +72,8 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         
         const defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
         
+        const detectedExtension = getExtensionFromUrl(streamUrl);
+
         const source: VideoSource = {
           uri: streamUrl,
           headers: {
@@ -74,11 +83,11 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
             "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive",
           },
-          overrideFileExtensionAndroid: getExtensionFromUrl(streamUrl),
+          ...(detectedExtension ? { overrideFileExtensionAndroid: detectedExtension } : {}),
         };
         
         logger.info(`[STREAM] Video source prepared with headers: ${JSON.stringify(Object.keys(source.headers || {}))}`);
-        logger.info(`[STREAM] File extension: ${getExtensionFromUrl(streamUrl)}`);
+        logger.info(`[STREAM] File extension hint: ${detectedExtension || 'auto-detect'}`);
         setVideoSource(source);
         setIsLoading(true);
         setIsTimeout(false);
