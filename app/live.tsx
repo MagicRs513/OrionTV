@@ -18,6 +18,12 @@ const logger = Logger.withTag('LiveScreen');
 const DEFAULT_M3U_URL = "https://oa.fushanhn.com/";
 
 const fixStreamUrl = (url: string): string => {
+  if (url.includes('fushanhn.con/')) {
+    const normalizedUrl = url.replace('fushanhn.con/', 'fushanhn.com/');
+    logger.warn(`[URL] Fixing possible domain typo: ${normalizedUrl}`);
+    return normalizedUrl;
+  }
+
   if (url.startsWith('https://oa.fushanhn.com//')) {
     return url.replace('https://oa.fushanhn.com//', 'https://oa.fushanhn.com/');
   }
@@ -56,6 +62,7 @@ export default function LiveScreen() {
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [useDirectPlay, setUseDirectPlay] = useState(false);
+  const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -70,12 +77,16 @@ export default function LiveScreen() {
     const originalUrl = selectedChannel.url;
     const urlLower = originalUrl.toLowerCase();
     const requiresProxy =
+      urlLower.includes('fushanhn.com') ||
+      urlLower.includes('fushanhn.con') ||
+      urlLower.includes('ggff.net') ||
       urlLower.includes('miguvideo.com') ||
       urlLower.includes('migu.cn') ||
       urlLower.includes('cmvideo.cn') ||
       urlLower.startsWith('http://');
 
-    if (!useDirectPlay && requiresProxy) {
+    const isForceProxyChannel = Boolean(forceProxyChannelIds[selectedChannel.id]);
+    if (isForceProxyChannel || (!useDirectPlay && requiresProxy)) {
       logger.info('[PROXY] Using backend proxy for current channel');
       return {
         streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
@@ -87,7 +98,7 @@ export default function LiveScreen() {
       streamUrl: fixStreamUrl(originalUrl),
       isUsingProxy: false,
     };
-  }, [selectedChannel, currentSource, useDirectPlay]);
+  }, [selectedChannel, currentSource, useDirectPlay, forceProxyChannelIds]);
 
   const streamUrl = streamSelection.streamUrl;
   const isUsingProxy = streamSelection.isUsingProxy;
@@ -301,6 +312,27 @@ export default function LiveScreen() {
 
   useTVEventHandler(deviceType === 'tv' ? handleTVEvent : () => {});
 
+  const handlePlaybackError = useCallback(
+    (message: string) => {
+      if (!selectedChannel || !currentSource || isUsingProxy) {
+        return;
+      }
+
+      const normalized = message.toLowerCase();
+      const isCleartextError = normalized.includes('cleartext communication') || normalized.includes('unknownserviceexception cleartext');
+
+      if (!isCleartextError) {
+        return;
+      }
+
+      logger.warn(`[PROXY] CLEAR-TEXT blocked, fallback to proxy for channel: ${selectedChannel.name}`);
+      setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
+      setUseDirectPlay(false);
+      showChannelTitle(`${selectedChannel.name}（切换代理重试）`);
+    },
+    [selectedChannel, currentSource, isUsingProxy]
+  );
+
   const dynamicStyles = createResponsiveStyles(deviceType, spacing);
 
   const renderLiveContent = () => {
@@ -351,6 +383,7 @@ export default function LiveScreen() {
           channelTitle={channelTitle}
           userAgent={userAgent}
           onPlaybackStatusUpdate={() => {}}
+          onPlaybackError={handlePlaybackError}
           autoRetry={true}
         />
         <View style={dynamicStyles.directPlayToggle}>

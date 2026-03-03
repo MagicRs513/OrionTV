@@ -17,6 +17,7 @@ interface LivePlayerProps {
   channelTitle?: string | null;
   userAgent?: string;
   onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  onPlaybackError?: (message: string) => void;
   autoRetry?: boolean;
 }
 
@@ -42,7 +43,7 @@ function getExtensionFromUrl(url: string): string {
   }
 }
 
-export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlaybackStatusUpdate, autoRetry = true }: LivePlayerProps) {
+export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlaybackStatusUpdate, onPlaybackError, autoRetry = true }: LivePlayerProps) {
   const video = useRef<Video>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
@@ -164,6 +165,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
         setIsTimeout(true);
         setIsLoaded(false);
         setErrorMessage(errorMsg);
+        onPlaybackError?.(errorMsg);
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
@@ -216,6 +218,7 @@ export default function LivePlayer({ streamUrl, channelTitle, userAgent, onPlayb
           setIsTimeout(true);
           setIsLoading(false);
           setErrorMessage(errorMsg);
+          onPlaybackError?.(errorMsg);
         }}
       />
       {isLoading && (
