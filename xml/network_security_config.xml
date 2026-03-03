@@ -20,6 +20,7 @@
         <domain includeSubdomains="true">fushanhn.com</domain>
         <domain includeSubdomains="true">ggff.net</domain>
         <domain includeSubdomains="true">hlsztemgsplive.miguvideo.com</domain>
+        <domain includeSubdomains="true">hlszymgsplive.miguvideo.com</domain>
     </domain-config>
     <debug-overrides>
         <trust-anchors>
