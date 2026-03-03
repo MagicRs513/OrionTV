@@ -69,7 +69,7 @@ export default function LiveScreen() {
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
   const [useDirectPlay, setUseDirectPlay] = useState(false);
   const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
-  const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(true);
+  const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -282,7 +282,7 @@ export default function LiveScreen() {
   const handleSourceChange = async (source: IPTVSource) => {
     setCurrentSource(source);
     setCurrentChannelIndex(0);
-    setUseVideoProxyFallback(true);
+    setUseVideoProxyFallback(false);
     setLoadError(null);
     await loadChannels(source.id);
   };
@@ -297,7 +297,7 @@ export default function LiveScreen() {
     const globalIndex = channels.findIndex((c) => c.id === channel.id);
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
-      setUseVideoProxyFallback(true);
+      setUseVideoProxyFallback(false);
       showChannelTitle(channel.name);
       setIsChannelListVisible(false);
     }
@@ -311,7 +311,7 @@ export default function LiveScreen() {
           ? (currentChannelIndex + 1) % channels.length
           : (currentChannelIndex - 1 + channels.length) % channels.length;
       setCurrentChannelIndex(newIndex);
-      setUseVideoProxyFallback(true);
+      setUseVideoProxyFallback(false);
       showChannelTitle(channels[newIndex].name);
     },
     [channels, currentChannelIndex]
@@ -382,7 +382,7 @@ export default function LiveScreen() {
 
       logger.warn(`[PROXY] CLEAR-TEXT blocked, fallback to proxy for channel: ${selectedChannel.name}`);
       setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
-      setUseVideoProxyFallback(true);
+      setUseVideoProxyFallback(false);
       setUseDirectPlay(false);
       showChannelTitle(`${selectedChannel.name}（切换代理重试）`);
     },
