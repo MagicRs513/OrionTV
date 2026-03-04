@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { Home, Heart, Search, Settings, Tv } from 'lucide-react-native';
+import { Home, Heart, Search, Settings } from 'lucide-react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { useResponsiveLayout } from '@/hooks/useResponsiveLayout';
 import { DeviceUtils } from '@/utils/DeviceUtils';
@@ -19,12 +19,6 @@ const navigationItems: NavigationItem[] = [
     label: '首页',
     icon: Home,
     route: '/',
-  },
-  {
-    name: 'live',
-    label: '直播',
-    icon: Tv,
-    route: '/live',
   },
   {
     name: 'search',
@@ -62,10 +56,7 @@ export const MobileBottomNavigation: React.FC<MobileBottomNavigationProps> = ({
     return null;
   }
 
-  // 在手机端过滤掉直播 tab
-  const filteredNavigationItems = navigationItems.filter(item => 
-    responsiveConfig.deviceType !== 'mobile' || item.name !== 'live'
-  );
+  const filteredNavigationItems = navigationItems;
 
   const handleNavigation = (route: string) => {
     if (route === '/') {

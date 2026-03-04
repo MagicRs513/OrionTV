@@ -83,9 +83,7 @@ export default function LiveScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isChannelListVisible, setIsChannelListVisible] = useState(false);
   const [channelTitle, setChannelTitle] = useState<string | null>(null);
-  const [forceProxyChannelIds, setForceProxyChannelIds] = useState<Record<string, true>>({});
-  const [useVideoProxyFallback, setUseVideoProxyFallback] = useState(false);
-  const [useWebViewFallback, setUseWebViewFallback] = useState(true);
+  const [useWebViewFallback, setUseWebViewFallback] = useState(false);
   const titleTimer = useRef<NodeJS.Timeout | null>(null);
 
   const selectedChannel = channels.length > 0 && currentChannelIndex < channels.length 
@@ -99,7 +97,7 @@ export default function LiveScreen() {
 
     const originalUrl = fixStreamUrl(selectedChannel.url);
     return {
-      streamUrl: api.getIPTVStreamProxyUrl(originalUrl, currentSource.id, currentSource.ua),
+      streamUrl: api.getVideoProxyUrl(originalUrl, currentSource.ua),
       isUsingProxy: true,
     };
   }, [selectedChannel, currentSource]);
@@ -110,9 +108,8 @@ export default function LiveScreen() {
   const playerRefreshKey = useMemo(() => {
     const channelFactor = (currentChannelIndex + 1) * 100;
     const proxyFactor = isUsingProxy ? 10 : 0;
-    const videoProxyFactor = useVideoProxyFallback ? 1 : 0;
-    return channelFactor + proxyFactor + videoProxyFactor;
-  }, [currentChannelIndex, isUsingProxy, useVideoProxyFallback]);
+    return channelFactor + proxyFactor;
+  }, [currentChannelIndex, isUsingProxy]);
   const webViewStreamUrl = useMemo(() => {
     if (!streamUrl) {
       return null;
@@ -300,8 +297,7 @@ export default function LiveScreen() {
   const handleSourceChange = async (source: IPTVSource) => {
     setCurrentSource(source);
     setCurrentChannelIndex(0);
-    setUseVideoProxyFallback(false);
-    setUseWebViewFallback(true);
+    setUseWebViewFallback(false);
     setLoadError(null);
     await loadChannels(source.id);
   };
@@ -316,8 +312,7 @@ export default function LiveScreen() {
     const globalIndex = channels.findIndex((c) => c.id === channel.id);
     if (globalIndex !== -1) {
       setCurrentChannelIndex(globalIndex);
-      setUseVideoProxyFallback(false);
-      setUseWebViewFallback(true);
+      setUseWebViewFallback(false);
       showChannelTitle(channel.name);
       setIsChannelListVisible(false);
     }
@@ -331,8 +326,7 @@ export default function LiveScreen() {
           ? (currentChannelIndex + 1) % channels.length
           : (currentChannelIndex - 1 + channels.length) % channels.length;
       setCurrentChannelIndex(newIndex);
-      setUseVideoProxyFallback(false);
-      setUseWebViewFallback(true);
+      setUseWebViewFallback(false);
       showChannelTitle(channels[newIndex].name);
     },
     [channels, currentChannelIndex]
@@ -353,113 +347,20 @@ export default function LiveScreen() {
 
   const handlePlaybackError = useCallback(
     (message: string) => {
-      if (!selectedChannel || !currentSource || isUsingProxy) {
-        const normalized = message.toLowerCase();
-        const isExtractorError =
-          normalized.includes('none of the available extractors') ||
-          normalized.includes('could read the stream') ||
-          normalized.includes('could not read the stream');
-        const isContainerUnsupportedError =
-          normalized.includes('error_code_parsing_container_unsupported') ||
-          normalized.includes('parsing_container_unsupported') ||
-          normalized.includes('container unsupported');
-        const isCleartextError =
-          normalized.includes('cleartext communication') ||
-          normalized.includes('unknownserviceexception cleartext');
-        const maybeProxyStreamError =
-          normalized.includes('response code: 404') ||
-          normalized.includes('http 404') ||
-          normalized.includes('http 403') ||
-          normalized.includes('forbidden') ||
-          normalized.includes('/api/proxy/stream') ||
-          normalized.includes('/api/video-proxy') ||
-          normalized.includes('source not found') ||
-          normalized.includes('upstream error') ||
-          normalized.includes('playback failed');
-
-        if (selectedChannel && isUsingProxy && (isExtractorError || isContainerUnsupportedError) && !useVideoProxyFallback) {
-          logger.warn(`[PROXY] Extractor failed on /api/proxy/stream, retrying with /api/video-proxy: ${selectedChannel.name}`);
-          setUseVideoProxyFallback(true);
-          showChannelTitle(`${selectedChannel.name}（切换备用代理）`);
-          return;
-        }
-
-        if (selectedChannel && isUsingProxy && isExtractorError && useVideoProxyFallback) {
-          logger.warn(`[PROXY] /api/video-proxy extractor failed, fallback to WebView: ${selectedChannel.name}`);
-          setUseWebViewFallback(true);
-          showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
-          return;
-        }
-
-        if (selectedChannel && isUsingProxy && isCleartextError) {
-          logger.warn(`[PROXY] Cleartext blocked in player, fallback to WebView: ${selectedChannel.name}`);
-          setUseWebViewFallback(true);
-          showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
-          return;
-        }
-
-        if (selectedChannel && isUsingProxy && isContainerUnsupportedError && useVideoProxyFallback) {
-          logger.warn(`[PROXY] /api/video-proxy container unsupported, fallback to WebView: ${selectedChannel.name}`);
-          setUseWebViewFallback(true);
-          showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
-          return;
-        }
-
-        if (selectedChannel && isUsingProxy && maybeProxyStreamError) {
-          logger.warn(`[PROXY] Proxy endpoint failed, fallback to WebView: ${selectedChannel.name}`);
-          setUseWebViewFallback(true);
-          showChannelTitle(`${selectedChannel.name}（代理失败，切换 WebView）`);
-        }
+      if (!selectedChannel || !currentSource) {
         return;
       }
 
-      const normalized = message.toLowerCase();
-      const isNetworkConnectionError =
-        normalized.includes('networkerror') ||
-        normalized.includes('error_code_io_network_connection_failed') ||
-        normalized.includes('network connection failed') ||
-        normalized.includes('failed to connect') ||
-        normalized.includes('httpdatasourceexception') ||
-        normalized.includes('connection refused') ||
-        normalized.includes('connection reset') ||
-        normalized.includes('unknownhostexception') ||
-        normalized.includes('sslhandshakeexception') ||
-        normalized.includes('unable to connect');
-      const isCleartextError = normalized.includes('cleartext communication') || normalized.includes('unknownserviceexception cleartext');
-
-      if (!isCleartextError) {
-        const maybeProxyStreamError =
-          normalized.includes('response code: 404') ||
-          normalized.includes('http 404') ||
-          normalized.includes('http 403') ||
-          normalized.includes('forbidden') ||
-          normalized.includes('/api/proxy/stream') ||
-          normalized.includes('source not found') ||
-          normalized.includes('upstream error') ||
-          normalized.includes('playback failed');
-
-        if (!isUsingProxy && isNetworkConnectionError) {
-          logger.warn(`[PROXY] Direct connection failed, fallback to proxy for channel: ${selectedChannel.name}`);
-          setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
-          setUseVideoProxyFallback(false);
-          showChannelTitle(`${selectedChannel.name}（直连失败，切换代理）`);
-          return;
-        }
-
-        if (isUsingProxy && maybeProxyStreamError && !useVideoProxyFallback) {
-          logger.warn(`[PROXY] /api/proxy/stream failed, retrying with /api/video-proxy: ${selectedChannel.name}`);
-          setUseVideoProxyFallback(true);
-          showChannelTitle(`${selectedChannel.name}（切换备用代理）`);
-        }
+      if (!useWebViewFallback) {
+        logger.warn(`[LIVE] Native player failed, fallback to WebView: ${selectedChannel.name}`);
+        setUseWebViewFallback(true);
+        showChannelTitle(`${selectedChannel.name}（切换 WebView 兜底）`);
         return;
       }
 
-      logger.warn(`[PROXY] CLEAR-TEXT blocked, fallback to proxy for channel: ${selectedChannel.name}`);
-      setForceProxyChannelIds((prev) => ({ ...prev, [selectedChannel.id]: true }));
-      setUseVideoProxyFallback(false);
-      showChannelTitle(`${selectedChannel.name}（切换代理重试）`);
+      logger.error(`[LIVE] Playback error after WebView fallback: ${message}`);
     },
-    [selectedChannel, currentSource, isUsingProxy, useVideoProxyFallback]
+    [selectedChannel, currentSource, useWebViewFallback]
   );
 
   const dynamicStyles = createResponsiveStyles(deviceType, spacing);
@@ -512,7 +413,7 @@ export default function LiveScreen() {
             streamUrl={webViewStreamUrl}
             fallbackUrls={webViewFallbackUrls}
             channelTitle={channelTitle}
-            onClose={() => setUseWebViewFallback(true)}
+            onClose={() => setUseWebViewFallback(false)}
           />
         ) : (
           <LivePlayer 
@@ -530,7 +431,7 @@ export default function LiveScreen() {
           <Text style={dynamicStyles.modeHint}>
             {useWebViewFallback
               ? "WebView + hls.js 兜底"
-              : "代理直放模式"}
+              : "代理播放器模式"}
           </Text>
         </View>
         <Modal
