@@ -104,6 +104,16 @@ export interface IPTVSourceResponse {
   channelNumber?: number;
 }
 
+type MaybeArrayResponse<T> =
+  | T[]
+  | {
+      success?: boolean;
+      data?: T[];
+      sources?: T[];
+      channels?: T[];
+      list?: T[];
+    };
+
 export class API {
   public baseURL: string = "https://any.lumi210.ggff.net";
 
@@ -276,23 +286,79 @@ export class API {
 
   async getIPTVChannels(sourceKey: string): Promise<IPTVChannel[]> {
     const response = await this._fetch(`/api/live/channels?source=${encodeURIComponent(sourceKey)}`);
-    const result = await response.json();
-    return result.data || [];
+    const result = (await response.json()) as MaybeArrayResponse<Partial<IPTVChannel> & Record<string, unknown>>;
+
+    let channelList: Array<Partial<IPTVChannel> & Record<string, unknown>> = [];
+    if (Array.isArray(result)) {
+      channelList = result;
+    } else if (Array.isArray(result?.data)) {
+      channelList = result.data;
+    } else if (Array.isArray(result?.channels)) {
+      channelList = result.channels;
+    } else if (Array.isArray(result?.list)) {
+      channelList = result.list;
+    }
+
+    return channelList
+      .map((item, index) => {
+        const name = (item.name || item.title || item.channelName || "") as string;
+        const url = (item.url || item.stream || item.playUrl || item.link || "") as string;
+        const id = (item.id || item.tvgId || `ch-${sourceKey}-${index}`) as string;
+
+        if (!name || !url) {
+          return null;
+        }
+
+        return {
+          id,
+          name,
+          url,
+          logo: (item.logo || item.icon || item.pic || item.image || undefined) as string | undefined,
+          group: (item.group || item.category || item.type || undefined) as string | undefined,
+          tvgId: (item.tvgId || undefined) as string | undefined,
+        } satisfies IPTVChannel;
+      })
+      .filter((item): item is IPTVChannel => item !== null);
   }
 
   async getIPTVSources(): Promise<IPTVSource[]> {
     const response = await this._fetch("/api/live/sources");
-    const result = await response.json();
-    const sources = result.data || [];
-    return sources.map((source: IPTVSourceResponse) => ({
-      id: source.key,
-      name: source.name,
-      url: source.url,
-      isActive: !source.disabled,
-      epg: source.epg,
-      ua: source.ua,
-      disabled: source.disabled,
-    }));
+    const result = (await response.json()) as MaybeArrayResponse<Partial<IPTVSourceResponse> & Record<string, unknown>>;
+
+    let sourceList: Array<Partial<IPTVSourceResponse> & Record<string, unknown>> = [];
+    if (Array.isArray(result)) {
+      sourceList = result;
+    } else if (Array.isArray(result?.data)) {
+      sourceList = result.data;
+    } else if (Array.isArray(result?.sources)) {
+      sourceList = result.sources;
+    } else if (Array.isArray(result?.list)) {
+      sourceList = result.list;
+    }
+
+    return sourceList
+      .map((source, index) => {
+        const id = (source.key || source.id || source.name || `source-${index}`) as string;
+        const name = (source.name || source.title || `直播源 ${index + 1}`) as string;
+        const url = (source.url || "") as string;
+        const disabled = Boolean(source.disabled);
+
+        if (!id) {
+          return null;
+        }
+
+        return {
+          id,
+          name,
+          url,
+          isActive: !disabled,
+          epg: source.epg as string | undefined,
+          ua: source.ua as string | undefined,
+          disabled,
+        } satisfies IPTVSource;
+      })
+      .filter((source): source is IPTVSource => source !== null)
+      .filter((source) => !source.disabled);
   }
 
   getIPTVStreamProxyUrl(originalUrl: string, sourceKey: string, userAgent?: string): string {
