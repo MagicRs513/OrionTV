@@ -6,7 +6,6 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { UpdateSection } from "@/components/settings/UpdateSection";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
 import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
@@ -19,12 +18,7 @@ type SectionItem = {
   key: string;
 };
 
-const rawSections = [
-  Platform.OS === "android" && {
-    component: <UpdateSection />,
-    key: "update",
-  },
-] as const;
+const rawSections = [] as const;
 
 function isSectionItem(
   item: false | undefined | SectionItem
